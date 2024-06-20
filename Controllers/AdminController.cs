@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using CRUDApi.DTOs;
 using CRUDApi.Models;
 using Octokit;
+using Microsoft.EntityFrameworkCore;
 namespace CRUDApi.Controllers
 {
     [Route("api/[controller]")]
@@ -21,9 +22,9 @@ namespace CRUDApi.Controllers
 
         #region GetAllCoursesInSemester
         [HttpGet("GetAllCoursesInSemester")]
-        public IActionResult GetAllCoursesInSemester()
+        public async Task< IActionResult> GetAllCoursesInSemester()
         {
-            var semesterCourses = (from s in _context.Semesters
+            var semesterCourses =await (from s in _context.Semesters
                                    select new AllCoursesInSemesterDto
                                    {
                                        semesterId = s.SemesterId,
@@ -43,7 +44,7 @@ namespace CRUDApi.Controllers
                                                                            .Count()
                                                   }).ToList()
 
-                                   }).ToList();
+                                   }).ToListAsync();
             return Ok(semesterCourses);
         }
         #endregion
@@ -124,24 +125,24 @@ namespace CRUDApi.Controllers
 
         #region Get All Students With Department name
         [HttpGet("Get All Students With Department name")]
-        public IActionResult GetAllStudentsWithDepartmentname()
+        public async Task< IActionResult> GetAllStudentsWithDepartmentname()
         {
-            var students = (from d in _context.Departments
+            var students =await (from d in _context.Departments
                             select new GetDepartmentStudentsDto
                             {
                                 departmentName = d.Name,
                                 numberofstudent = _context.StudentInfos
                                 .Where(si => si.DepartmentId == d.DepartmentId).Count()
-                            }).ToList();
+                            }).ToListAsync();
             return Ok(students);
         }
         #endregion
 
         #region Get All Semesters
         [HttpGet("Get All Semeters")]
-        public IActionResult getallsemesters(string facultyId = "FAC001")
+        public async  Task<IActionResult>getallsemesters(string facultyId = "FAC001")
         {
-            var semester = (from s in _context.Semesters
+            var semester =await (from s in _context.Semesters
                             where s.FacultyId == facultyId
                             select new GetSemestersDto
                             {
@@ -151,22 +152,56 @@ namespace CRUDApi.Controllers
                                 Number = s.Number,
                                 Years = s.Years
 
-                            }).ToList();
+                            }).ToListAsync();
             
             return Ok(semester);
 
         }
         #endregion
 
-        #region Get Semester By ID
-       /* [HttpGet("Get Semester By ID/{semesterId}")]
-        public IActionResult GetSemesterByID(string semesterId)
-        {
-            var semester = _context.Semesters.FirstOrDefault(s=>s.SemesterId==semesterId);
-            
-        }*/
+        #region Get Semester By ID *
+        /* [HttpGet("Get Semester By ID/{semesterId}")]
+         public IActionResult GetSemesterByID(string semesterId)
+         {
+             var semester = _context.Semesters.FirstOrDefault(s=>s.SemesterId==semesterId);
+
+         }*/
 
         #endregion
+
+        #region Get All Courses To Create Semester
+        [HttpGet("Get All Courses")]
+        public async Task<IActionResult> GetAllCourses()
+        {
+            var courses = await(from c in _context.Courses
+                           select new GetAllCoursesToCreateSemesterDto
+                           {
+                               courseID = c.CourseId,
+                               courseName = c.Name
+                           }).ToListAsync();
+            return Ok(courses);
+        }
+        #endregion
+
+        #region Get All Instrucors To Create Semester
+        [HttpGet("Get All Instructors")]
+        public async Task<IActionResult> GetAllDoctors()
+        {
+            var doctors = await(from i in _context.Users
+                           join r in _context.UserRoles on i.UserId equals r.UserId
+                           where r.RoleId == "ROLE002"
+                           select new GetAllDoctorsToCreateSemesterDto
+                           {
+                               instructorId= i.UserId,
+                               instructorName= i.FullName
+                           }).ToListAsync();
+            return Ok(doctors);
+
+
+        }
+        #endregion
+
+
 
 
     }
