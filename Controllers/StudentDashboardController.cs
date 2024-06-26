@@ -2,11 +2,16 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using CRUDApi.Context;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 
 namespace CRUDApi.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+
     public class StudentDashboardController : ControllerBase
     {
         private readonly LMSContext _context;
@@ -19,23 +24,23 @@ namespace CRUDApi.Controllers
 
 
         [HttpGet]
-        [Route("{studentId}/unsubmitted")]
-        public IActionResult GetUnsubmittedQuizzesAndTasks(string studentId)
+        [Route("GetUnsubmittedQuizzesAndTasks")]
+        public IActionResult GetUnsubmittedQuizzesAndTasks()
         {
 
 
 
-            //var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+            var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
 
-            //if (emailClaim == null)
-            //{
-            //    return BadRequest("Email claim not found in token.");
-            //}
+            if (emailClaim == null)
+            {
+                return BadRequest("Email claim not found in token.");
+            }
 
-            //var email = emailClaim.Value;
+            var email = emailClaim.Value;
 
-            //var user = _context.Users.FirstOrDefault(u => u.Email == email);
-            //var userId = user.UserId;
+            var user = _context.Users.FirstOrDefault(u => u.Email == email);
+            var studentId = user.UserId;
 
 
             var unsubmittedQuizzes = _context.Quizzes

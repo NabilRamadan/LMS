@@ -1,7 +1,9 @@
 ﻿using AutoMapper;
+using CRUDApi.Context;
 using CRUDApi.DTOs;
 using CRUDApi.Entities;
 using CRUDApi.Interfaces;
+using CRUDApi.Models;
 using CRUDApi.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -9,8 +11,11 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Microsoft.EntityFrameworkCore.Query.Internal;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
 namespace CRUDApi.Controllers
 {
     [Route("api/[controller]")]
@@ -22,25 +27,28 @@ namespace CRUDApi.Controllers
         private readonly RoleManager<ApplicationUserRole> _roleManager;
         private readonly IMapper _mapper;
         private readonly ITokenService _tokenService;
+        private readonly LMSContext _context;
         public AccountController(
             UserManager<ApplicationUser> userManager,
             SignInManager<ApplicationUser> signInManager,
             RoleManager<ApplicationUserRole> roleManager,
             ITokenService tokenService,
-            IMapper mapper)
+            IMapper mapper, LMSContext context)
         {
             _mapper = mapper;
             _userManager = userManager;
             _signInManager = signInManager;
             _roleManager = roleManager;
             _tokenService = tokenService;
+            _context = context;
         }
-        [HttpPost("Register")]
+        #region Register *
+        /*[HttpPost("Register")]
         public async Task<ActionResult<UserDto>> Register(RegisterDTO model)
         {
             if (await IsUserExists(model.DisplayName)) return BadRequest("UserName is already Exist");
             var User = new ApplicationUser()
-            {
+            { 
                 DisplayName = model.DisplayName.ToLower(),
                 Email = model.Email,//Ahmed.nasser@gmail.com
                 UserName = model.Email.Split('@')[0],//Ahmed.nasser
@@ -49,9 +57,41 @@ namespace CRUDApi.Controllers
             };
 
             var result = await _userManager.CreateAsync(User, model.Password);
-
             if (!result.Succeeded)
-                return BadRequest();
+                return BadRequest("not Success");
+
+            var userEntity = new CRUDApi.Models.User
+            {
+                UserId = User.Id,
+                FullName = User.DisplayName,
+                Email = User.Email,
+                Password = model.Password, // Consider hashing this if it's in plain text
+                Phone = User.PhoneNumber,
+                CreatedAt = DateTime.UtcNow,
+                Status = "Active",
+                FacultyId = "FAC001",
+                ImagePath = null,
+
+            };
+
+            _context.Users.Add(userEntity);
+
+            var role = await _context.Roles.FirstOrDefaultAsync(r => r.Name == model.RoleOfUser);
+            if (role == null)
+            {
+                return BadRequest("Role does not exist");
+            }
+
+            var userRole = new UserRole
+            {
+                UserId = userEntity.UserId,
+                RoleId = role.RoleId
+            };
+            _context.UserRoles.Add(userRole);
+
+            await _context.SaveChangesAsync();
+
+            
             var ReturnedUser = new UserDto()
             {
                 DisplayName = User.DisplayName,
@@ -61,7 +101,142 @@ namespace CRUDApi.Controllers
             };
 
             return Ok(ReturnedUser);
+        }*/ 
+        #endregion
+
+        #region Register
+        [HttpPost("Staff Register")]
+        public async Task<ActionResult<UserDto>> Register(RegisterDTO model)
+        {
+            if (await IsUserExists(model.DisplayName))
+                return BadRequest("UserName already exists");
+
+            var applicationUser = new ApplicationUser()
+            {
+                DisplayName = model.DisplayName.ToLower(),
+                Email = model.Email,
+                UserName = model.Email.Split('@')[0],
+                PhoneNumber = model.PhoneNumber,
+                CurrentUserRole = model.RoleOfUser
+            };
+
+            var result = await _userManager.CreateAsync(applicationUser, model.Password);
+            if (!result.Succeeded)
+                return BadRequest("Registration failed");
+
+            var userEntity = new CRUDApi.Models.User
+            {
+                UserId = applicationUser.Id,
+                FullName = applicationUser.DisplayName,
+                Email = applicationUser.Email,
+                Password = applicationUser.PasswordHash, // Save the hashed password
+                Phone = applicationUser.PhoneNumber,
+                CreatedAt = DateTime.UtcNow,
+                Status = "Active",
+                FacultyId = "FAC001",
+                ImagePath = null
+            };
+
+            _context.Users.Add(userEntity);
+
+            var role = await _context.Roles.FirstOrDefaultAsync(r => r.Name == model.RoleOfUser);
+            if (role == null)
+            {
+                return BadRequest("Role does not exist");
+            }
+
+            var userRole = new UserRole
+            {
+                UserId = userEntity.UserId,
+                RoleId = role.RoleId
+            };
+            _context.UserRoles.Add(userRole);
+
+            await _context.SaveChangesAsync();
+
+            var returnedUser = new UserDto()
+            {
+                DisplayName = applicationUser.DisplayName,
+                Email = applicationUser.Email,
+                Token = await _tokenService.CreateTokenAsync(applicationUser, _userManager),
+                UserRole = model.RoleOfUser
+            };
+
+            return Ok(returnedUser);
         }
+
+        #endregion#region Register
+
+        #region Student Register
+        [HttpPost("Student Register")]
+        public async Task<ActionResult<UserDto>> studentRegister(StudentRigesterDto model)
+        {
+            if (await IsUserExists(model.DisplayName))
+                return BadRequest("UserName already exists");
+
+            var applicationUser = new ApplicationUser()
+            {
+                DisplayName = model.DisplayName.ToLower(),
+                Email = model.Email,
+                UserName = model.Email.Split('@')[0],
+                PhoneNumber = model.PhoneNumber,
+                CurrentUserRole = model.RoleOfUser,
+                
+            };
+
+            var result = await _userManager.CreateAsync(applicationUser, model.Password);
+            if (!result.Succeeded)
+                return BadRequest("Registration failed");
+
+            var userEntity = new CRUDApi.Models.User
+            {
+                UserId = applicationUser.Id,
+                FullName = applicationUser.DisplayName,
+                Email = applicationUser.Email,
+                Password = applicationUser.PasswordHash,
+                Phone = applicationUser.PhoneNumber,
+                CreatedAt = DateTime.UtcNow,
+                Status = "Active",
+                FacultyId = "FAC001",
+                ImagePath = null
+            };
+            _context.Users.Add(userEntity);
+            var role = await _context.Roles.FirstOrDefaultAsync(r => r.Name == model.RoleOfUser);
+            if (role == null)
+            {
+                return BadRequest("Role does not exist");
+            }
+
+            var userRole = new UserRole
+            {
+                UserId = userEntity.UserId,
+                RoleId = role.RoleId
+            };
+            _context.UserRoles.Add(userRole);
+
+            var studentInf = new StudentInfo
+            {
+                UserId = applicationUser.Id,
+                AcademicId = model.AcademicId,
+                DepartmentId = model.DepartmentId,
+                Level = model.Level,
+            };
+            await _context.StudentInfos.AddAsync(studentInf);
+
+            await _context.SaveChangesAsync();
+
+            var returnedUser = new UserDto()
+            {
+                DisplayName = applicationUser.DisplayName,
+                Email = applicationUser.Email,
+                Token = await _tokenService.CreateTokenAsync(applicationUser, _userManager),
+                UserRole = model.RoleOfUser
+            };
+
+            return Ok(returnedUser);
+        } 
+        #endregion
+
 
 
 

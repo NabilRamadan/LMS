@@ -38,7 +38,7 @@ namespace CRUDApi.Controllers
 
             var email = emailClaim.Value;
 
-            var user = _context.Users.FirstOrDefault(u => u.Email == email);
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
             var userId = user.UserId;
 
             var InstructorInfo = await (from us in _context.Users
@@ -79,13 +79,13 @@ namespace CRUDApi.Controllers
 
             var email = emailClaim.Value;
 
-            var user = _context.Users.FirstOrDefault(u => u.Email == email);
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
 
             //        // If the user exists, return their user_id
             //        return user?.UserId;
 
             var userid = user.UserId;
-            var course = (from cs in _context.CourseSemesters
+            var course = await(from cs in _context.CourseSemesters
                           join c in _context.Courses on cs.CourseId equals c.CourseId
                           join ics in _context.InstructorCourseSemesters on cs.CycleId equals ics.CourseCycleId
                           where ics.InstructorId == userid
@@ -95,7 +95,7 @@ namespace CRUDApi.Controllers
                               Hours = c.Hours,
                               ImagePath=c.ImagePath,
                               Name=c.Name,
-                          }).ToList();
+                          }).ToListAsync();
            
             if (course == null)
             {
@@ -110,7 +110,7 @@ namespace CRUDApi.Controllers
         [HttpGet("CurrentCourseMaterial")]
         public async Task<ActionResult<AllMaterialDto>> GetCourseMaterials(string CycleId)
         {
-            var materials = (from cs in _context.CourseSemesters
+            var materials = await(from cs in _context.CourseSemesters
                              join l in _context.Lectures on cs.CycleId equals l.CourseCycleId
                              where cs.CycleId == CycleId
                              select new AllMaterialDto
@@ -121,7 +121,7 @@ namespace CRUDApi.Controllers
                                  CreatedAt = l.CreatedAt
                                 
                              })
-                            .ToList();
+                            .ToListAsync();
             var material =new List <Dictionary<string,object?>>();
             foreach (var item in materials)
             {
@@ -142,7 +142,7 @@ namespace CRUDApi.Controllers
         [HttpGet("Getfilesoflecture")]
         public async Task<ActionResult> getMaterial(string lectureId)
         {
-            var material = (from l in _context.Lectures
+            var material = await(from l in _context.Lectures
                             join lf in _context.LectureFiles on l.LectureId equals lf.LectureId
                             where l.LectureId == lectureId
                             select new CourseMaterialDto
@@ -151,7 +151,7 @@ namespace CRUDApi.Controllers
                                 fileName = lf.Name,
                                 FilePath = lf.FilePath,
                                 CreatedAt = lf.CreatedAt
-                            }).ToList();
+                            }).ToListAsync();
             if (material == null)
             {
                 return NoContent();
@@ -173,7 +173,7 @@ namespace CRUDApi.Controllers
 
             var email = emailClaim.Value;
 
-            var user = _context.Users.FirstOrDefault(u => u.Email == email);
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
             var userId = user.UserId;
 
             var ftpServer = "site1439.siteasp.net";
@@ -208,8 +208,8 @@ namespace CRUDApi.Controllers
                 LectureFileId = Guid.NewGuid().GetHashCode(),
                 Name = file_Name
             };
-            _context.LectureFiles.Add(newFile);
-            _context.SaveChanges();
+            await _context.LectureFiles.AddAsync(newFile);
+            await _context.SaveChangesAsync();
             //return Ok("File uploaded successfully");
             return Created("",newFile);
         }
@@ -218,25 +218,25 @@ namespace CRUDApi.Controllers
 
         #region Update Lecture File
         [HttpPut("UpdateLecturefile")]
-        public IActionResult updateLecureFile(int file_Id,string fileName)
+        public async Task< IActionResult> updateLecureFile(int file_Id,string fileName)
         {
-            var file =_context.LectureFiles.FirstOrDefault(x => x.LectureFileId == file_Id);
+            var file = await _context.LectureFiles.FirstOrDefaultAsync(x => x.LectureFileId == file_Id);
             if (file == null)
             {
                 return NotFound();
             }
             file.Name = fileName;
             _context.LectureFiles.Update(file);
-            _context.SaveChanges();
+            await _context.SaveChangesAsync();
             return Ok("Updated Succefuly ..!");
         }
         #endregion
 
         #region Delete Lecture File
         [HttpDelete("DeleteLectureFile")]
-        public IActionResult deleteLectureFile(int FileId)
+        public async Task< IActionResult> deleteLectureFile(int FileId)
         {
-            var file =_context.LectureFiles.FirstOrDefault(x=>x.LectureFileId==FileId);
+            var file = await _context.LectureFiles.FirstOrDefaultAsync(x=>x.LectureFileId==FileId);
             if (file == null)
             {
                 return NotFound();
@@ -261,7 +261,7 @@ namespace CRUDApi.Controllers
                 }
             }
             _context.LectureFiles.Remove(file);
-            _context.SaveChanges();
+            await _context.SaveChangesAsync();
             return Ok("Deleted Succefully ..!");
             //return Ok("file name : "+name+"\n file path : "+ file.FilePath);
         }
@@ -280,35 +280,39 @@ namespace CRUDApi.Controllers
 
             var email = emailClaim.Value;
 
-            var user = _context.Users.FirstOrDefault(u => u.Email == email);
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
 
             //        // If the user exists, return their user_id
             //        return user?.UserId;
 
             var userId = user.UserId;
-            var tasks = (from t in _context.Tasks
+            var tasks =await (from t in _context.Tasks
                          where t.CourseCycleId == cycleId && t.InstructorId == userId
-                         select new TaskDto
+                         select new GetCurrentCourseTasksDto
                          {
                              taskId = t.TaskId,
                              taskName = t.Title,
                              startDate = (DateTime)t.StartDate,
                              endDate = (DateTime)t.EndDate,
                              filePath = t.FilePath,
-                         }).ToList();
-            var task = new List<Dictionary<string, object?>>();
+                             numberOfAllStudents=_context.StudentEnrollments
+                             .Count(se=>se.CourseCycleId==t.CourseCycleId),
+                             numberOfStudentsUploads=_context.TaskAnswers
+                             .Count(ta => ta.TaskId == t.TaskId)
+                         }).ToListAsync();
+            /*var task = new List<Dictionary<string, object?>>();
             foreach (var item in tasks)
             {
                 task.Add(typeof(TaskDto).GetProperties()
                     .Where(property => property.GetValue(item) != null)
                     .ToDictionary(property => property.Name, property => property.GetValue(item)));
-            }
-            if (task == null || !task.Any())
+            }*/
+            if (tasks == null || !tasks.Any())
             {
                 return NotFound();
             }
 
-            return Ok(task);
+            return Ok(tasks);
         }
         #endregion
 
@@ -316,7 +320,7 @@ namespace CRUDApi.Controllers
         [HttpGet("GetStudentsWhoUploadThetask")]
         public async Task<IActionResult> getAllStudentsWhoUploadTheTask(string taskId)
         {
-            var students=(from ta in _context.TaskAnswers
+            var students= await (from ta in _context.TaskAnswers
                          join u in _context.Users on ta.StudentId equals u.UserId
                          where ta.TaskId == taskId
                          select new StudentsWhoUploadTheTaskDto
@@ -325,7 +329,7 @@ namespace CRUDApi.Controllers
                              studentName=u.FullName,
                              filePath=ta.FilePath,
                              timeUploaded=ta.CreatedAt
-                         }).ToList();
+                         }).ToListAsync();
             if (students == null)
             {
                 return NoContent();
@@ -348,7 +352,7 @@ namespace CRUDApi.Controllers
 
             var email = emailClaim.Value;
 
-            var user = _context.Users.FirstOrDefault(u => u.Email == email);
+            var user =await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
             var userId = user.UserId;
 
             var ftpServer = "site1439.siteasp.net";
@@ -386,17 +390,17 @@ namespace CRUDApi.Controllers
                 InstructorId=userId,
                 Title=TaskName,
             };
-            _context.Tasks.Add(newTask);
-            _context.SaveChanges();
+            await _context.Tasks.AddAsync(newTask);
+            await _context.SaveChangesAsync();
             return Ok("Created ");
         }
         #endregion
 
         #region Update An Assignment 
         [HttpPut("UpdateAnAssignment")]
-        public IActionResult updateAnAssignmemt(String taskId ,UploadAssignmentDto ua)
+        public async Task< IActionResult> updateAnAssignmemt(String taskId ,UploadAssignmentDto ua)
         {
-            var task=_context.Tasks.FirstOrDefault(t => t.TaskId == taskId);
+            var task=await _context.Tasks.FirstOrDefaultAsync(t => t.TaskId == taskId);
             if (task == null) {
                 return BadRequest();
             }
@@ -417,16 +421,16 @@ namespace CRUDApi.Controllers
                 task.EndDate= ua.EndDate;
             }
             _context.Tasks.Update(task);
-            _context.SaveChanges();
+            await _context.SaveChangesAsync();
             return Ok("Updated Succefully ");
         }
         #endregion
 
         #region Delete An Assignment
         [HttpDelete("DeleteAnAssignment")]
-        public IActionResult DeleteAnAssignment(String taskId)
+        public async Task< IActionResult> DeleteAnAssignment(String taskId)
         {
-            var file=_context.Tasks.FirstOrDefault(t=>t.TaskId == taskId);
+            var file=await _context.Tasks.FirstOrDefaultAsync(t => t.TaskId == taskId);
             if (file == null)
             {
                 return NotFound();
@@ -451,7 +455,7 @@ namespace CRUDApi.Controllers
                 }
             }
             _context.Tasks.Remove(file);
-            _context.SaveChanges();
+            await _context.SaveChangesAsync();
             return Ok("Deleted Succefully ");
         }
         #endregion
@@ -460,7 +464,7 @@ namespace CRUDApi.Controllers
         [HttpGet("GetAllStudentsEnrolledInAcourse")]
         public async Task<IActionResult> getAllStudentsEnrroledInCourse(string CycleId)
         {
-            var students = (from se in _context.StudentEnrollments
+            var students =await (from se in _context.StudentEnrollments
                             join cs in _context.CourseSemesters on se.CourseCycleId equals cs.CycleId
                             join u in _context.Users on se.StudentId equals u.UserId
                             where cs.CycleId == CycleId
@@ -468,7 +472,7 @@ namespace CRUDApi.Controllers
                             {
                                 studentId = u.UserId,
                                 studentName = u.FullName
-                            }).ToList();
+                            }).ToListAsync();
             if(students.Count == 0)
             {
                 return BadRequest("there no students enrolled in this Course ");
@@ -481,7 +485,7 @@ namespace CRUDApi.Controllers
         [HttpGet("GetGradesForCurrentCourseForAstudent")]
         public async Task<IActionResult> getGradesForCurrentCourseForAstudent(string CycleId,string studentId)
         {
-            var quizGrades = (from q in _context.Quizzes
+            var quizGrades = await (from q in _context.Quizzes
                               join sqg in _context.StudentQuizGrades on q.QuizId equals sqg.QuizId
                               where q.CourseCycleId == CycleId && sqg.StudentId == studentId
                               orderby sqg.CreatedAt
@@ -491,9 +495,9 @@ namespace CRUDApi.Controllers
                                   Title = q.Title,
                                   Grade = sqg.Grade,
                                   Date = (DateTime)sqg.CreatedAt
-                              }).ToList();
+                              }).ToListAsync();
 
-            var taskGrades = (from ta in _context.TaskAnswers
+            var taskGrades =await (from ta in _context.TaskAnswers
                               join t in _context.Tasks on ta.TaskId equals t.TaskId
                               where t.CourseCycleId == CycleId && ta.StudentId == studentId
                               select new GradeDto
@@ -502,7 +506,7 @@ namespace CRUDApi.Controllers
                                   Title = t.Title,
                                   Grade = ta.Grade,
                                   Date = (DateTime)ta.CreatedAt
-                              }).ToList();
+                              }).ToListAsync();
             var grades = quizGrades.Concat(taskGrades).ToList();
             if (grades == null)
             {
@@ -512,9 +516,9 @@ namespace CRUDApi.Controllers
         }
         #endregion
 
-        #region Upload A Lecture Folder
-        [HttpPost("UploadLectureFolder")]
-        public IActionResult UploadLectureFolder(string title, string CycleId)
+        #region Upload A Lecture Folder *
+        /*[HttpPost("UploadLectureFolder")]
+        public async Task< IActionResult> UploadLectureFolder(string title, string CycleId)
         {
             var lecture = new Lecture
             {
@@ -524,8 +528,27 @@ namespace CRUDApi.Controllers
                 Title=title,
                 Type="Lecture"
             };
-            _context.Lectures.Add(lecture);
-            _context.SaveChanges();
+            await _context.Lectures.AddAsync(lecture);
+            await _context.SaveChangesAsync();
+            return Ok(lecture);
+
+        }*/
+        #endregion
+
+        #region Upload A Lecture Folder
+        [HttpPost("UploadLectureFolder")]
+        public async Task< IActionResult> UploadLectureFolder(UploadLectureFolderDto folder)
+        {
+            var lecture = new Lecture
+            {
+                CourseCycleId = folder.cycleId,
+                CreatedAt = DateTime.Now,
+                LectureId=Guid.NewGuid().ToString(),
+                Title= folder.title,
+                Type= folder.type
+            };
+            await _context.Lectures.AddAsync(lecture);
+            await _context.SaveChangesAsync();
             return Ok(lecture);
 
         }
@@ -533,64 +556,64 @@ namespace CRUDApi.Controllers
 
         #region Update Lecture Folder
         [HttpPut("UpdateLectureFolderName")]
-        public IActionResult updateLectureFolderName(string name,string lectureId)
+        public async Task< IActionResult> updateLectureFolderName(string name,string lectureId)
         {
-            var lecture =_context.Lectures.FirstOrDefault(l=>l.LectureId== lectureId);
+            var lecture = await _context.Lectures.FirstOrDefaultAsync(l=>l.LectureId== lectureId);
             if (lecture == null)
             {
                 return BadRequest();
             }
             lecture.Title = name;
             _context.Lectures.Update(lecture);
-            _context.SaveChanges();
+            await _context.SaveChangesAsync();
             return Ok(lecture);
         }
         #endregion
 
         #region Delete Lecture Folder
         [HttpDelete("DeleteLectureFolder")]
-        public IActionResult deleteLectureFolder(string lectureId)
+        public async Task<IActionResult> deleteLectureFolder(string lectureId)
         {
-            var lecture = _context.Lectures.FirstOrDefault(l => l.LectureId == lectureId);
+            var lecture = await _context.Lectures.FirstOrDefaultAsync(l => l.LectureId == lectureId);
             if (lecture == null)
             {
                 return BadRequest();
             }
-            var files = _context.LectureFiles.Where(f => f.LectureId == lectureId);
+            var files =  _context.LectureFiles.Where(f => f.LectureId == lectureId);
             if(files!=null)
             {
                 _context.LectureFiles.RemoveRange(files);
 
             }
             _context.Lectures.Remove(lecture);
-            _context.SaveChanges();
+            await _context.SaveChangesAsync();
             return Ok("Deleted Succefully ");
         }
         #endregion
 
         #region Edit Student Grade
        [HttpPut("editStudentGrade")]
-        public IActionResult editStudentGrade(string studentId,String examId,Double grade)
+        public async Task< IActionResult> editStudentGrade(string studentId,String examId,Double grade)
         {
             /*var quiz = from sqg in _context.StudentQuizGrades
                        where sqg.StudentId == studentId && sqg.QuizId == examId
                        select sqg;*/
-            var quiz = _context.StudentQuizGrades.Where(q => q.QuizId == examId && q.StudentId==studentId).FirstOrDefault();
+            var quiz = await _context.StudentQuizGrades.Where(q => q.QuizId == examId && q.StudentId==studentId).FirstOrDefaultAsync();
             if (quiz != null)
             {
                 quiz.Grade=grade;
                 quiz.CreatedAt = DateTime.Now;
                 _context.StudentQuizGrades.Update(quiz);
-                _context.SaveChanges();
+                await _context.SaveChangesAsync();
                 return Ok(quiz);
             }
-            var task = _context.TaskAnswers.Where(t => t.TaskId == examId && t.StudentId == studentId).FirstOrDefault();
+            var task = await _context.TaskAnswers.Where(t => t.TaskId == examId && t.StudentId == studentId).FirstOrDefaultAsync();
             if (task != null)
             {
                 task.Grade = grade;
                 task.CreatedAt = DateTime.Now;
                 _context.TaskAnswers.Update(task);
-                _context.SaveChanges();
+                await _context.SaveChangesAsync();
                 return Ok(task);
             }
             return BadRequest();
@@ -610,32 +633,28 @@ namespace CRUDApi.Controllers
 
             var email = emailClaim.Value;
 
-            var user = _context.Users.FirstOrDefault(u => u.Email == email);
-
-            //        // If the user exists, return their user_id
-            //        return user?.UserId;
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
 
             var userId = user.UserId;
 
 
-            // Validate student enrollment in the course cycle
-            /*var enrolled = _context.StudentEnrollments.Any(se => se.StudentId == userId && se.CourseCycleId == cycleId);
-            if (!enrolled)
-            {
-                return Unauthorized("Student not enrolled in the specified course cycle");
-            }*/
-            var quizzes = (from q in _context.Quizzes
+            
+            var quizzes = await (from q in _context.Quizzes
                            where q.CourseCycleId == cycleId && q.InstructorId==userId
-                           select new AllQuizesDto
+                           select new getAllQuizesForOneCourseDto
                            {
                                Id = q.QuizId,
                                Title = q.Title,
                                StartDate = (DateTime)q.StartDate,
                                EndDate = (DateTime)q.EndDate,
-                               Status = (q.StartDate >= DateTime.Now && q.EndDate <= DateTime.Now) ? "Not Available" : " Available" ?? "is null"
+                               Status = (q.StartDate >= DateTime.Now && q.EndDate <= DateTime.Now) ? "Not Available" : " Available" ?? "is null",
+                               numberOfAllStudents = _context.StudentEnrollments
+                             .Count(se => se.CourseCycleId == q.CourseCycleId),
+                              /* numberOfStudentsSolve=_context.QuizAnswers
+                               .Count(qa=>qa.)*/
 
                            })
-                          .ToList();
+                          .ToListAsync();
 
             if (quizzes == null || !quizzes.Any())
             {
@@ -693,9 +712,12 @@ namespace CRUDApi.Controllers
 
         #region Delete Quiz
         [HttpDelete("DeleteQuiz")]
-        public IActionResult deleteQuiz(string quizId)
+        public async Task<IActionResult> deleteQuizAsync(string quizId)
         {
-            var quiz = _context.Quizzes.Include(q => q.Questions).ThenInclude(q => q.QuestionAnswers).FirstOrDefault(q => q.QuizId == quizId);
+            var quiz = await _context.Quizzes
+                .Include(q => q.Questions)
+                .ThenInclude(q => q.QuestionAnswers)
+                .FirstOrDefaultAsync(q => q.QuizId == quizId);
 
             if (quiz == null)
             {
@@ -734,7 +756,7 @@ namespace CRUDApi.Controllers
 
             var email = emailClaim.Value;
 
-            var user = _context.Users.FirstOrDefault(u => u.Email == email);
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
             var userId = user.UserId;
 
             var quiz = new Quiz

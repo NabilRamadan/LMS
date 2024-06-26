@@ -30,8 +30,8 @@ public partial class StudentInfo
     [Column("level")]
     public int Level { get; set; }
 
-    [Column("gpa")]
-    public double? Gpa { get; set; }
+/*    [Column("gpa")]
+    public double? Gpa { get; set; }*/
 
     [ForeignKey("DepartmentId")]
     [InverseProperty("StudentInfos")]

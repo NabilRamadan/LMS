@@ -116,7 +116,7 @@ namespace CRUDApi.Controllers
 
 
 
-        [HttpGet]
+        [HttpGet("Get All Quiz&Task info")]
         public async Task<ActionResult> GetAllTasksAndQuizzes()
         {
             var tasks = await _context.Tasks.Include(t => t.Instructor)

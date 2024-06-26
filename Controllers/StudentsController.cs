@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
+using Octokit;
 using System;
 using System.Collections;
 using System.Net;
@@ -32,6 +33,15 @@ namespace CRUDApi.Controllers
         {
             _context = context;
             //_environment = environment;
+        }
+
+        public string currentSemester()
+        {
+            var semester = _context.Semesters
+                .OrderByDescending(s => s.CreatedAt)
+                .Select(s => s.SemesterId)
+                .FirstOrDefault();
+            return semester;
         }
 
 
@@ -63,7 +73,7 @@ namespace CRUDApi.Controllers
                            join c in _context.Courses on cs.CourseId equals c.CourseId
                            join se in _context.StudentEnrollments on cs.CycleId equals se.CourseCycleId
                            join u in _context.Users on se.StudentId equals u.UserId
-                           where se.StudentId == studentId
+                           where se.StudentId == studentId 
                            select new CourseDTO
                            {
                                CycleId = cs.CycleId,
@@ -958,5 +968,7 @@ namespace CRUDApi.Controllers
         }*/
         #endregion 
         #endregion
+
+        
     }
 }
