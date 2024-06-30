@@ -64,7 +64,7 @@ namespace CRUDApi.Controllers
             var studentId = user.UserId;
             if (user.Status.ToLower() == "not active")
             {
-                return BadRequest("not active");
+                return NoContent();
             }
             string currentSemester = CurrentSemester();
 
@@ -222,6 +222,10 @@ namespace CRUDApi.Controllers
             //        return user?.UserId;
 
             var studentId = user.UserId;
+            if (user.Status.ToLower() == "not active")
+            {
+                return NoContent();
+            }
             string currentSemester = CurrentSemester();
 
             // Get tasks for the enrolled student

@@ -32,18 +32,23 @@ namespace CRUDApi.Controllers
             return semester;
         }
 
-        private bool isAdmin()
+        private bool isAdmin(string email)
         {
-            var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+            /*var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
             if (emailClaim == null)
             {
                 return false;
             }
-            var email = emailClaim.Value;
-            var user = _context.Users.FirstOrDefault(u => u.Email == email);
-            var userRole = user.UserRoles.Select(us => us.RoleId).First();
+            var email = emailClaim.Value;*/
 
-            if (userRole != "ROLE001")
+            var user = (from u in _context.Users
+                       join ur in _context.UserRoles on u.UserId equals ur.UserId
+                       where u.Email == email
+                       select ur.RoleId).FirstOrDefault();
+
+            //var userRole = user.UserRoles.Select(us => us.RoleId).First();
+            Console.WriteLine( "============"+ user);
+            if (user!= "ROLE001")
             {
                 return false;
             }
@@ -54,14 +59,18 @@ namespace CRUDApi.Controllers
         [HttpGet("Get Admin Info")]
         public async Task<IActionResult> GetAdminInfo()
         {
+            
             var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
 
             if (emailClaim == null)
             {
                 return BadRequest("Email claim not found in token.");
             }
-
             var email = emailClaim.Value;
+            if (!isAdmin(email))
+            {
+                return Unauthorized();
+            }
 
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
             var userId = user.UserId;
@@ -136,6 +145,18 @@ namespace CRUDApi.Controllers
         [HttpGet("Get All Courses In All Semesters")]
         public async Task< IActionResult> GetAllCoursesInSemester()
         {
+            var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+
+            if (emailClaim == null)
+            {
+                return BadRequest("Email claim not found in token.");
+            }
+            var email = emailClaim.Value;
+            if (!isAdmin(email))
+            {
+                return Unauthorized();
+            }
+
             var semesterCourses =await (from s in _context.Semesters
                                    select new AllCoursesInSemesterDto
                                    {
@@ -167,6 +188,17 @@ namespace CRUDApi.Controllers
         [HttpGet("Get Course by ID")]
         public IActionResult GetCourseById(string courseId)
         {
+            var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+
+            if (emailClaim == null)
+            {
+                return BadRequest("Email claim not found in token.");
+            }
+            var email = emailClaim.Value;
+            if (!isAdmin(email))
+            {
+                return Unauthorized();
+            }
             var course = from c in _context.Courses
                          where c.CourseId == courseId
                          select new GetCourseDataDto
@@ -190,6 +222,17 @@ namespace CRUDApi.Controllers
         [HttpPut("Edit Course/{courseId}")]
         public IActionResult EditCourse(string courseId, UpdateCourceDto updateCourceDto)
         {
+            var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+
+            if (emailClaim == null)
+            {
+                return BadRequest("Email claim not found in token.");
+            }
+            var email = emailClaim.Value;
+            if (!isAdmin(email))
+            {
+                return Unauthorized();
+            }
             var course = _context.Courses.FirstOrDefault(c => c.CourseId == courseId);
             if (course == null)
             {
@@ -222,6 +265,17 @@ namespace CRUDApi.Controllers
         [HttpPost("Create Course")]
         public IActionResult CreatCourse(CreateCourseDto createCourseDto)
         {
+            var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+
+            if (emailClaim == null)
+            {
+                return BadRequest("Email claim not found in token.");
+            }
+            var email = emailClaim.Value;
+            if (!isAdmin(email))
+            {
+                return Unauthorized();
+            }
             var course = new Course
             {
                 CourseId = Guid.NewGuid().ToString(),
@@ -241,6 +295,17 @@ namespace CRUDApi.Controllers
         [HttpGet("Get All Departments with number of students")]
         public async Task< IActionResult> GetAllStudentsWithDepartmentname()
         {
+            var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+
+            if (emailClaim == null)
+            {
+                return BadRequest("Email claim not found in token.");
+            }
+            var email = emailClaim.Value;
+            if (!isAdmin(email))
+            {
+                return Unauthorized();
+            }
             var students =await (from d in _context.Departments
                             select new GetDepartmentStudentsDto
                             {
@@ -257,6 +322,17 @@ namespace CRUDApi.Controllers
         [HttpGet("Get All Semeters")]
         public async  Task<IActionResult>getallsemesters(string facultyId = "FAC001")
         {
+            var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+
+            if (emailClaim == null)
+            {
+                return BadRequest("Email claim not found in token.");
+            }
+            var email = emailClaim.Value;
+            if (!isAdmin(email))
+            {
+                return Unauthorized();
+            }
             var semester =await (from s in _context.Semesters
                             where s.FacultyId == facultyId
                             select new GetSemestersDto
@@ -278,7 +354,18 @@ namespace CRUDApi.Controllers
          [HttpGet("Get Semester By ID/{semesterId}")]
          public async Task< IActionResult> GetSemesterByID(string semesterId)
          {
-             //var Semester = _context.Semesters.FirstOrDefault(s=>s.SemesterId==semesterId);
+            var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+
+            if (emailClaim == null)
+            {
+                return BadRequest("Email claim not found in token.");
+            }
+            var email = emailClaim.Value;
+            if (!isAdmin(email))
+            {
+                return Unauthorized();
+            }
+            //var Semester = _context.Semesters.FirstOrDefault(s=>s.SemesterId==semesterId);
             var semester =await (from s in _context.Semesters
                             join cs in _context.CourseSemesters on s.SemesterId equals cs.SemesterId
                             join c in _context.Courses on cs.CourseId equals c.CourseId
@@ -302,6 +389,17 @@ namespace CRUDApi.Controllers
         [HttpGet("Get All Courses")]
         public async Task<IActionResult> GetAllCourses()
         {
+            var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+
+            if (emailClaim == null)
+            {
+                return BadRequest("Email claim not found in token.");
+            }
+            var email = emailClaim.Value;
+            if (!isAdmin(email))
+            {
+                return Unauthorized();
+            }
             var courses = await(from c in _context.Courses
                            select new GetAllCoursesToCreateSemesterDto
                            {
@@ -316,6 +414,17 @@ namespace CRUDApi.Controllers
         [HttpGet("Get All Instructors")]
         public async Task<IActionResult> GetAllDoctors()
         {
+            var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+
+            if (emailClaim == null)
+            {
+                return BadRequest("Email claim not found in token.");
+            }
+            var email = emailClaim.Value;
+            if (!isAdmin(email))
+            {
+                return Unauthorized();
+            }
             var doctors = await(from i in _context.Users
                            join r in _context.UserRoles on i.UserId equals r.UserId
                            where r.RoleId == "ROLE002"
@@ -334,6 +443,19 @@ namespace CRUDApi.Controllers
         [HttpPost("Create Semester")]
         public async Task<IActionResult> CreateSemester(CreateSemesterDto createSemesterDto)
         {
+            var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+
+            if (emailClaim == null)
+            {
+                return BadRequest("Email claim not found in token.");
+            }
+            var email = emailClaim.Value;
+            if (!isAdmin(email))
+            {
+                return Unauthorized();
+            }
+
+
             if (createSemesterDto == null)
             {
                 return BadRequest();
@@ -365,6 +487,17 @@ namespace CRUDApi.Controllers
         [HttpPost("Add Courses And Instructors to Semester")]
         public async Task<IActionResult> AddCoursesAndInstructorstoSemester(string semesterId,string courseId,string instructorId)
         {
+            var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+
+            if (emailClaim == null)
+            {
+                return BadRequest("Email claim not found in token.");
+            }
+            var email = emailClaim.Value;
+            if (!isAdmin(email))
+            {
+                return Unauthorized();
+            }
             var semester =await _context.Semesters.FirstOrDefaultAsync(s => s.SemesterId == semesterId);
             if (semester == null)
             {
@@ -400,7 +533,14 @@ namespace CRUDApi.Controllers
          public async Task<IActionResult> EnrollthestudentTotheTheCoursesinSemester(string studentId,string courseCycleId)
          {
 
-            if (!isAdmin())
+            var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+
+            if (emailClaim == null)
+            {
+                return BadRequest("Email claim not found in token.");
+            }
+            var email = emailClaim.Value;
+            if (!isAdmin(email))
             {
                 return Unauthorized();
             }
@@ -437,14 +577,17 @@ namespace CRUDApi.Controllers
         [HttpPost("Enroll List Of Course to One Student in Semester")]
         public async Task<IActionResult> EnrollListOfCoursetoOneStudentinSemester(string studentId, List<string> courseCycleId)
         {
-            /*if (!isAdmin())
+            var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+
+            if (emailClaim == null)
+            {
+                return BadRequest("Email claim not found in token.");
+            }
+            var email = emailClaim.Value;
+            if (!isAdmin(email))
             {
                 return Unauthorized();
-            }*/
-            /*if (string.IsNullOrWhiteSpace(studentId) )
-            {
-                return BadRequest("Student ID OR Course Cycle ID cannot be null or empty.");
-            }*/
+            }
 
             var studentExists = await _context.Users.AnyAsync(s => s.UserId == studentId);
             if (!studentExists)
@@ -478,14 +621,18 @@ namespace CRUDApi.Controllers
         [HttpPost("Enroll List Of Student To One Course in Semester")]
         public async Task<IActionResult> EnrollListOfStudentToOneCourseinSemester(List<string> studentId, string courseCycleId)
         {
-            /*if (string.IsNullOrWhiteSpace(studentId) )
+            var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+
+            if (emailClaim == null)
             {
-                return BadRequest("Student ID OR Course Cycle ID cannot be null or empty.");
-            }*/
-            if (!isAdmin())
+                return BadRequest("Email claim not found in token.");
+            }
+            var email = emailClaim.Value;
+            if (!isAdmin(email))
             {
                 return Unauthorized();
             }
+
             var courseCycleExists = await _context.CourseSemesters.AnyAsync(c => c.CycleId == courseCycleId);
             if (!courseCycleExists)
             {
@@ -521,6 +668,17 @@ namespace CRUDApi.Controllers
         [HttpGet("Department Info")]
         public async Task<ActionResult<IEnumerable<DepartmentDetailDto>>> GetDepartmentsWithStudents()
         {
+            var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+
+            if (emailClaim == null)
+            {
+                return BadRequest("Email claim not found in token.");
+            }
+            var email = emailClaim.Value;
+            if (!isAdmin(email))
+            {
+                return Unauthorized();
+            }
             var departments = await _context.Departments
                 .Include(d => d.StudentInfos)
                 .ThenInclude(si => si.User)
@@ -550,6 +708,17 @@ namespace CRUDApi.Controllers
         [HttpPost("Create Department")]
         public async Task<ActionResult> CreateDepartment(CreateDepartmentDto departmentDto)
         {
+            var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+
+            if (emailClaim == null)
+            {
+                return BadRequest("Email claim not found in token.");
+            }
+            var email = emailClaim.Value;
+            if (!isAdmin(email))
+            {
+                return Unauthorized();
+            }
             if (departmentDto == null)
             {
                 return BadRequest(new { Message = "Invalid department data." });
@@ -597,6 +766,17 @@ namespace CRUDApi.Controllers
         [HttpGet("Get All student Ids To enroll Them in Courses")]
         public async Task<IActionResult> GetAllstudentIdsToenrollTheminCourses([FromQuery] string email = null)
         {
+            var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+
+            if (emailClaim == null)
+            {
+                return BadRequest("Email claim not found in token.");
+            }
+            var emai1 = emailClaim.Value;
+            if (!isAdmin(emai1))
+            {
+                return Unauthorized();
+            }
             var studentsQuery = from u in _context.Users
                                 join r in _context.UserRoles on u.UserId equals r.UserId
                                 where r.RoleId == "ROLE003"
@@ -627,6 +807,17 @@ namespace CRUDApi.Controllers
         [HttpGet("Get All Main Courses")]
         public async Task<ActionResult<GetAllMainCoursesDto>> GetAllMainCourses()
         {
+            var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+
+            if (emailClaim == null)
+            {
+                return BadRequest("Email claim not found in token.");
+            }
+            var email = emailClaim.Value;
+            if (!isAdmin(email))
+            {
+                return Unauthorized();
+            }
             var courses =await (from c in _context.Courses
                            select new GetAllMainCoursesDto
                            {
@@ -649,6 +840,17 @@ namespace CRUDApi.Controllers
         [HttpDelete("Delete Course/{courseId}")]
         public async Task<IActionResult> DeleteCourse(string courseId)
         {
+            var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+
+            if (emailClaim == null)
+            {
+                return BadRequest("Email claim not found in token.");
+            }
+            var email = emailClaim.Value;
+            if (!isAdmin(email))
+            {
+                return Unauthorized();
+            }
             var course=await _context.Courses.FirstOrDefaultAsync(c=>c.CourseId==courseId);
             if (course == null)
             {
@@ -669,6 +871,17 @@ namespace CRUDApi.Controllers
         [HttpDelete("Delete Semester")]
         public async Task<IActionResult> DeleteSemester(string semesterId)
         {
+            var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+
+            if (emailClaim == null)
+            {
+                return BadRequest("Email claim not found in token.");
+            }
+            var email = emailClaim.Value;
+            if (!isAdmin(email))
+            {
+                return Unauthorized();
+            }
             var semester = await _context.Semesters.FirstOrDefaultAsync(s => s.SemesterId== semesterId);
             if (semester == null)
             {
@@ -690,14 +903,18 @@ namespace CRUDApi.Controllers
         [HttpGet("Get All Instructors Ids")]
         public async Task<IActionResult> GetAllInstructorsIds([FromQuery] string email = null)
         {
+
             var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
 
             if (emailClaim == null)
             {
                 return BadRequest("Email claim not found in token.");
             }
-
             var userEmail = emailClaim.Value;
+            if (!isAdmin(userEmail))
+            {
+                return Unauthorized();
+            }
 
             var user = _context.Users.FirstOrDefault(u => u.Email == userEmail);
             var userId = user.UserId;
@@ -733,8 +950,19 @@ namespace CRUDApi.Controllers
          [HttpPut("Activate Student Acount/{studentId}")]
           public async Task<IActionResult> ActivateStudentAcount(string studentId,string status)
           {
-              
-              var student =await (from u in _context.Users
+            var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+
+            if (emailClaim == null)
+            {
+                return BadRequest("Email claim not found in token.");
+            }
+            var email = emailClaim.Value;
+            if (!isAdmin(email))
+            {
+                return Unauthorized();
+            }
+
+            var student =await (from u in _context.Users
                             join r in _context.UserRoles on u.UserId equals r.UserId
                             where u.UserId== studentId&& r.RoleId == "ROLE003"
                                   select u).FirstOrDefaultAsync();
@@ -756,6 +984,17 @@ namespace CRUDApi.Controllers
         [HttpGet("Get All CyclesIds For Semester")]
         public async Task<IActionResult> GetAllCyclesIdsForSemester(string semesterId,string studentId)
         {
+            var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+
+            if (emailClaim == null)
+            {
+                return BadRequest("Email claim not found in token.");
+            }
+            var email = emailClaim.Value;
+            if (!isAdmin(email))
+            {
+                return Unauthorized();
+            }
             var cycles =await (from cs in _context.CourseSemesters
                           join c in _context.Courses on cs.CourseId equals c.CourseId
                           join ics in _context.InstructorCourseSemesters on cs.CycleId equals ics.CourseCycleId

@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using CRUDApi.Context;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CRUDApi.Controllers
@@ -7,5 +8,11 @@ namespace CRUDApi.Controllers
     [ApiController]
     public class AdminDashboardController : ControllerBase
     {
+        private readonly LMSContext _context;
+        public AdminDashboardController(LMSContext context)
+        {
+            _context = context;
+        }
+
     }
 }
