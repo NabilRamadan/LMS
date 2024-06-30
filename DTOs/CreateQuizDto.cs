@@ -7,7 +7,7 @@
         //  public string Duration { get; set; }
         public DateTime startDate { get; set; }
         public DateTime endDate { get; set; }
-        public double? grade { get; set; }
+        //public double? grade { get; set; }
         public string courseCycleId { get; set; }
         //public string Status { get; set; }
         //public List<CreateQuestionDto> Questions { get; set; }

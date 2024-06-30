@@ -9,10 +9,11 @@ using Octokit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Data.SqlClient;
 using System.Collections.Generic;
+using System.Security.Claims;
 namespace CRUDApi.Controllers
 {
     [Route("api/[controller]")]
-    //[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     [ApiController]
     public class AdminController : ControllerBase
     {
@@ -21,8 +22,77 @@ namespace CRUDApi.Controllers
         {
             _context = context;
         }
+
+        private string? CurrentSemester()
+        {
+            var semester = _context.Semesters
+                .OrderByDescending(s => s.CreatedAt)
+                .Select(s => s.SemesterId)
+                .FirstOrDefault();
+            return semester;
+        }
+
+        private bool isAdmin()
+        {
+            var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+            if (emailClaim == null)
+            {
+                return false;
+            }
+            var email = emailClaim.Value;
+            var user = _context.Users.FirstOrDefault(u => u.Email == email);
+            var userRole = user.UserRoles.Select(us => us.RoleId).First();
+
+            if (userRole != "ROLE001")
+            {
+                return false;
+            }
+            return true;
+
+        }
+        #region Get Current User Info
+        [HttpGet("Get Admin Info")]
+        public async Task<IActionResult> GetAdminInfo()
+        {
+            var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+
+            if (emailClaim == null)
+            {
+                return BadRequest("Email claim not found in token.");
+            }
+
+            var email = emailClaim.Value;
+
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
+            var userId = user.UserId;
+
+
+            var adminInfo = await (from us in _context.Users
+                                        join f in _context.Faculties on us.FacultyId equals f.FacultyId
+                                        join u in _context.Universities on f.UniversityId equals u.UniversityId
+                                        where us.UserId == userId
+                                        select new InstructorInfoDto
+                                        {
+                                            FullName = us.FullName,
+                                            Email = us.Email,
+                                            Phone = us.Phone,
+                                            ImagePath = us.ImagePath,
+                                            FacultyName = f.Name,
+                                            UniversityName = u.Name
+                                        }).FirstOrDefaultAsync();
+
+
+
+            if (adminInfo == null)
+            {
+                return NotFound("User not found.");
+            }
+
+            return Ok(adminInfo);
+        }
+        #endregion
         #region Admin Info
-        [HttpGet("Admin-Info")]
+        /*[HttpGet("Admin-Info")]
         public async Task<IActionResult> GetAdminDetails()
         {
             var adminRole = await _context.Roles
@@ -58,12 +128,12 @@ namespace CRUDApi.Controllers
             };
 
             return Ok(adminDetails);
-        }
+        }*/
 
         #endregion
 
-        #region Get All Courses In Semester
-        [HttpGet("Get All Courses In Semester")]
+        #region Get All Courses In All Semesteres
+        [HttpGet("Get All Courses In All Semesters")]
         public async Task< IActionResult> GetAllCoursesInSemester()
         {
             var semesterCourses =await (from s in _context.Semesters
@@ -90,6 +160,8 @@ namespace CRUDApi.Controllers
             return Ok(semesterCourses);
         }
         #endregion
+
+        
 
         #region Get Course by ID
         [HttpGet("Get Course by ID")]
@@ -152,7 +224,7 @@ namespace CRUDApi.Controllers
         {
             var course = new Course
             {
-                CourseId = createCourseDto.CourseId,
+                CourseId = Guid.NewGuid().ToString(),
                 Name = createCourseDto.Name,
                 CreatedAt = DateTime.Now,
                 Hours = createCourseDto.Hours,
@@ -165,13 +237,14 @@ namespace CRUDApi.Controllers
         }
         #endregion
 
-        #region Get All Students With Department name
-        [HttpGet("Get All Students With Department name")]
+        #region Get All Departments with number of students
+        [HttpGet("Get All Departments with number of students")]
         public async Task< IActionResult> GetAllStudentsWithDepartmentname()
         {
             var students =await (from d in _context.Departments
                             select new GetDepartmentStudentsDto
                             {
+                                departmentId=d.DepartmentId,
                                 departmentName = d.Name,
                                 numberofstudent = _context.StudentInfos
                                 .Count(si => si.DepartmentId == d.DepartmentId)
@@ -201,13 +274,27 @@ namespace CRUDApi.Controllers
         }
         #endregion
 
-        #region Get All CourseCycleIDs in ONe Semester *
-        /* [HttpGet("Get Semester By ID/{semesterId}")]
-         public IActionResult GetSemesterByID(string semesterId)
+        #region Get All CourseCycleIDs in  semester 
+         [HttpGet("Get Semester By ID/{semesterId}")]
+         public async Task< IActionResult> GetSemesterByID(string semesterId)
          {
-             var semester = _context.Semesters.FirstOrDefault(s=>s.SemesterId==semesterId);
+             //var Semester = _context.Semesters.FirstOrDefault(s=>s.SemesterId==semesterId);
+            var semester =await (from s in _context.Semesters
+                            join cs in _context.CourseSemesters on s.SemesterId equals cs.SemesterId
+                            join c in _context.Courses on cs.CourseId equals c.CourseId
+                            join ics in _context.InstructorCourseSemesters on cs.CycleId equals ics.CourseCycleId
+                            join u in _context.Users on ics.InstructorId equals u.UserId
+                            where s.SemesterId == semesterId
+                            select new GetSemesterByIDDto
+                            {
+                                cycleId= cs.CycleId,
+                                courseName= c.Name,
+                                instructorName= u.FullName
 
-         }*/
+                            }).ToListAsync();
+            return Ok(semester);
+
+         }
 
         #endregion
 
@@ -247,10 +334,16 @@ namespace CRUDApi.Controllers
         [HttpPost("Create Semester")]
         public async Task<IActionResult> CreateSemester(CreateSemesterDto createSemesterDto)
         {
-            if(createSemesterDto == null)
+            if (createSemesterDto == null)
             {
                 return BadRequest();
             }
+            var existingSemester = await _context.Semesters.FindAsync(createSemesterDto.semesterId);
+            if (existingSemester != null)
+            {
+                return Conflict("Semester ID already exists");
+            }
+            
             var semester=new Semester
             {
                 SemesterId= createSemesterDto.semesterId,
@@ -286,7 +379,6 @@ namespace CRUDApi.Controllers
                 CreatedAt=DateTime.Now,
                 
             };
-            //ait Console.Out.WriteLineAsync("the cycleId Is "+courseSemester.CycleId );
             _context.CourseSemesters.Add(courseSemester);
             var instructorCourseSemester = new InstructorCourseSemester
             {
@@ -307,7 +399,14 @@ namespace CRUDApi.Controllers
          [HttpPost("Enroll the student To the The Courses in Semester")]
          public async Task<IActionResult> EnrollthestudentTotheTheCoursesinSemester(string studentId,string courseCycleId)
          {
-             if (string.IsNullOrWhiteSpace(studentId) || string.IsNullOrWhiteSpace(courseCycleId))
+
+            if (!isAdmin())
+            {
+                return Unauthorized();
+            }
+
+
+            if (string.IsNullOrWhiteSpace(studentId) || string.IsNullOrWhiteSpace(courseCycleId))
              {
                  return BadRequest("Student ID and Course Cycle ID cannot be null or empty.");
              }
@@ -338,6 +437,10 @@ namespace CRUDApi.Controllers
         [HttpPost("Enroll List Of Course to One Student in Semester")]
         public async Task<IActionResult> EnrollListOfCoursetoOneStudentinSemester(string studentId, List<string> courseCycleId)
         {
+            /*if (!isAdmin())
+            {
+                return Unauthorized();
+            }*/
             /*if (string.IsNullOrWhiteSpace(studentId) )
             {
                 return BadRequest("Student ID OR Course Cycle ID cannot be null or empty.");
@@ -379,7 +482,10 @@ namespace CRUDApi.Controllers
             {
                 return BadRequest("Student ID OR Course Cycle ID cannot be null or empty.");
             }*/
-
+            if (!isAdmin())
+            {
+                return Unauthorized();
+            }
             var courseCycleExists = await _context.CourseSemesters.AnyAsync(c => c.CycleId == courseCycleId);
             if (!courseCycleExists)
             {
@@ -439,14 +545,19 @@ namespace CRUDApi.Controllers
 
 
         #endregion
-
+        
         #region Create Department
         [HttpPost("Create Department")]
         public async Task<ActionResult> CreateDepartment(CreateDepartmentDto departmentDto)
         {
+            if (departmentDto == null)
+            {
+                return BadRequest(new { Message = "Invalid department data." });
+            }
+
             var department = new Department
             {
-                DepartmentId = departmentDto.DepartmentId,
+                DepartmentId = Guid.NewGuid().ToString(),
                 FacultyId = departmentDto.FacultyId,
                 Name = departmentDto.Name,
                 CreatedAt = DateTime.UtcNow
@@ -455,13 +566,197 @@ namespace CRUDApi.Controllers
             _context.Departments.Add(department);
             await _context.SaveChangesAsync();
 
-            return Ok(new { Message = "Department created" });
-        } 
+            return Ok(new { Message = "Department created successfully." });
+        }
         #endregion
 
+        #region Get All student Ids To enroll Them in Courses *
+        /*[HttpGet("Get All student Ids To enroll Them in Courses")]
+        public async Task<IActionResult> GetAllstudentIdsToenrollTheminCourses()
+        {
+            var students =await (from u in _context.Users
+                            join r in _context.UserRoles on u.UserId equals r.UserId
+                            where r.RoleId== "ROLE003"
+                            select new GetAllstudentIdsDto
+                            {
+                                studentId = u.UserId,
+                                studentName = u.FullName,
+                                studentEmail=u.Email
+                            }).ToListAsync();
+            if(students==null) 
+            {
+                return BadRequest();
+
+            }
+            return Ok(students);
+
+        }*/
+        #endregion
+
+        #region Get All student Ids To enroll Them in Courses 
+        [HttpGet("Get All student Ids To enroll Them in Courses")]
+        public async Task<IActionResult> GetAllstudentIdsToenrollTheminCourses([FromQuery] string email = null)
+        {
+            var studentsQuery = from u in _context.Users
+                                join r in _context.UserRoles on u.UserId equals r.UserId
+                                where r.RoleId == "ROLE003"
+                                select new GetAllstudentIdsDto
+                                {
+                                    studentId = u.UserId,
+                                    studentName = u.FullName,
+                                    studentEmail = u.Email
+                                };
+
+            if (!string.IsNullOrEmpty(email))
+            {
+                studentsQuery = studentsQuery.Where(s => s.studentEmail == email);
+            }
+
+            var students = await studentsQuery.ToListAsync();
+
+            if (students == null || students.Count == 0)
+            {
+                return NotFound();
+            }
+
+            return Ok(students);
+        }
+        #endregion
+
+        #region Get All Main Courses
+        [HttpGet("Get All Main Courses")]
+        public async Task<ActionResult<GetAllMainCoursesDto>> GetAllMainCourses()
+        {
+            var courses =await (from c in _context.Courses
+                           select new GetAllMainCoursesDto
+                           {
+                               courseId = c.CourseId,
+                               courseName = c.Name,
+                               courseHoures = c.Hours
+                           }).ToListAsync();
+            if (courses == null)
+            {
+                return BadRequest("There is no Courses");
+            }
+            return Ok(courses);
+        }
 
 
 
+        #endregion
+
+        #region Delete Course
+        [HttpDelete("Delete Course/{courseId}")]
+        public async Task<IActionResult> DeleteCourse(string courseId)
+        {
+            var course=await _context.Courses.FirstOrDefaultAsync(c=>c.CourseId==courseId);
+            if (course == null)
+            {
+                return NotFound();
+            }
+            var test=await _context.CourseSemesters.FirstOrDefaultAsync(c=>c.CourseId == courseId);
+            if (test != null)
+            {
+                return BadRequest("Cant Delete This Course");
+            }
+            _context.Courses.Remove(course);
+            _context.SaveChanges();
+            return Ok("Deleted Succefully");
+        }
+        #endregion
+
+        #region Delete Semester
+        [HttpDelete("Delete Semester")]
+        public async Task<IActionResult> DeleteSemester(string semesterId)
+        {
+            var semester = await _context.Semesters.FirstOrDefaultAsync(s => s.SemesterId== semesterId);
+            if (semester == null)
+            {
+                return NotFound();
+            }
+            var test = await _context.CourseSemesters.FirstOrDefaultAsync(c => c.SemesterId == semesterId);
+            if (test != null)
+            {
+                return BadRequest("Cant Delete This Semester");
+            }
+            _context.Semesters.Remove(semester);
+            _context.SaveChanges();
+            return Ok("Deleted Succefully");
+
+        }
+        #endregion
+
+        #region Get All Instructors Ids
+        [HttpGet("Get All Instructors Ids")]
+        public async Task<IActionResult> GetAllInstructorsIds([FromQuery] string email = null)
+        {
+                var studentsQuery = from u in _context.Users
+                                    join r in _context.UserRoles on u.UserId equals r.UserId
+                                    where r.RoleId == "ROLE002"
+                                    select new GetAllstudentIdsDto
+                                    {
+                                        studentId = u.UserId,
+                                        studentName = u.FullName,
+                                        studentEmail = u.Email
+                                    };
+
+                if (!string.IsNullOrEmpty(email))
+                {
+                    studentsQuery = studentsQuery.Where(s => s.studentEmail == email);
+                }
+
+                var students = await studentsQuery.ToListAsync();
+
+                if (students == null || students.Count == 0)
+                {
+                    return NotFound();
+                }
+
+                return Ok(students);
+            }
+        #endregion
+
+        #region Activate Student Acount
+         [HttpPut("Activate Student Acount/{studentId}")]
+          public async Task<IActionResult> ActivateStudentAcount(string studentId,string status)
+          {
+              
+              var student =await (from u in _context.Users
+                            join r in _context.UserRoles on u.UserId equals r.UserId
+                            where u.UserId== studentId&& r.RoleId == "ROLE003"
+                                  select u).FirstOrDefaultAsync();
+              if (student == null)
+              {
+                  return NotFound();
+              }
+              student.Status= status;
+              _context.Users.Update(student);
+              _context.SaveChanges();
+              return Ok(student.FullName+" IS "+student.Status);
+
+
+  
+        }
+        #endregion
+
+        #region Get All CyclesIds For Semester
+        [HttpGet("Get All CyclesIds For Semester")]
+        public async Task<IActionResult> GetAllCyclesIdsForSemester(string semesterId)
+        {
+            var cycles =await (from cs in _context.CourseSemesters
+                          join c in _context.Courses on cs.CourseId equals c.CourseId
+                          join ics in _context.InstructorCourseSemesters on cs.CycleId equals ics.CourseCycleId
+                          join u in _context.Users on ics.InstructorId equals u.UserId
+                          where cs.SemesterId == semesterId
+                          select new GetAllCyclesIdsForSemesterDto
+                          {
+                              courseName = c.Name,
+                              cycleId = cs.CycleId,
+                              instructorFullName = u.FullName
+                          }).ToListAsync();
+            return Ok(cycles);
+        }
+        #endregion
 
 
 

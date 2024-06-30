@@ -5,6 +5,7 @@ using CRUDApi.Context;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
+using CRUDApi.DTOs;
 
 namespace CRUDApi.Controllers
 {
@@ -25,7 +26,7 @@ namespace CRUDApi.Controllers
 
         [HttpGet]
         [Route("GetUnsubmittedQuizzesAndTasks")]
-        public IActionResult GetUnsubmittedQuizzesAndTasks()
+        public async Task< IActionResult> GetUnsubmittedQuizzesAndTasks()
         {
 
 
@@ -43,13 +44,38 @@ namespace CRUDApi.Controllers
             var studentId = user.UserId;
 
 
-            var unsubmittedQuizzes = _context.Quizzes
-                .Where(q => !q.StudentQuizGrades.Any(s => s.StudentId == studentId))
-            .ToList();
+            var unsubmittedQuizzes =await (from q in _context.Quizzes
+                                   .Where(q => !q.StudentQuizGrades.Any(s => s.StudentId == studentId))
+                                      select new GetUnsubmittedQuizzesAndTasksDto
+                                      {
+                                          title = q.Title,
+                                          grade = q.Grade,
+                                          endDate = q.EndDate,
+                                          startDate = q.StartDate,
+                                          createdAt = q.CreatedAt
+                                      }).ToListAsync();
 
-            var unsubmittedTasks = _context.Tasks
+            /*var unsubmittedQuizzes = _context.Quizzes
+                .Where(q => !q.StudentQuizGrades.Any(s => s.StudentId == studentId))
+            .ToList();*/
+
+            var unsubmittedTasks =await (from t in _context.Tasks
+                                   .Where(t => !t.TaskAnswers.Any(s => s.StudentId == studentId))
+                                      select new GetUnsubmittedQuizzesAndTasksDto
+                                      {
+                                          title = t.Title,
+                                          grade = t.Grade,
+                                          endDate = t.EndDate,
+                                          startDate = t.StartDate,
+                                          createdAt = t.CreatedAt
+                                      }).ToListAsync();
+
+
+            /*var unsubmittedTasks = _context.Tasks
                 .Where(t => !t.TaskAnswers.Any(a => a.StudentId == studentId))
-                .ToList();
+                .ToList();*/
+
+
 
             var unsubmittedData = new
             {

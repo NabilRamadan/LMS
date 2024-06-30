@@ -11,6 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using Octokit;
+using Swashbuckle.AspNetCore.SwaggerGen;
 using System;
 using System.Collections;
 using System.Net;
@@ -35,23 +36,21 @@ namespace CRUDApi.Controllers
             //_environment = environment;
         }
 
-        public string currentSemester()
+        private string CurrentSemester()
         {
             var semester = _context.Semesters
                 .OrderByDescending(s => s.CreatedAt)
                 .Select(s => s.SemesterId)
-                .FirstOrDefault();
+                .First();
             return semester;
         }
 
 
 
         #region Get Current User Cources With Instructor Name
-        //[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
         [HttpGet("CurrentCourcesInfo")]
         public async Task<ActionResult<CourseDTO>> GetEnrolledCourses()
         {
-            // Retrieve the email claim from the token's claims
             var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
 
             if (emailClaim == null)
@@ -62,18 +61,15 @@ namespace CRUDApi.Controllers
             var email = emailClaim.Value;
 
             var user = _context.Users.FirstOrDefault(u => u.Email == email);
-
-            //        // If the user exists, return their user_id
-            //        return user?.UserId;
-
             var studentId = user.UserId;
 
-            // Get enrolled courses using student ID
-            var courses = (from cs in _context.CourseSemesters
+            string currentSemester = CurrentSemester();
+
+            var courses =await (from cs in _context.CourseSemesters
                            join c in _context.Courses on cs.CourseId equals c.CourseId
                            join se in _context.StudentEnrollments on cs.CycleId equals se.CourseCycleId
                            join u in _context.Users on se.StudentId equals u.UserId
-                           where se.StudentId == studentId 
+                           where se.StudentId == studentId &&cs.SemesterId== currentSemester
                            select new CourseDTO
                            {
                                CycleId = cs.CycleId,
@@ -84,7 +80,7 @@ namespace CRUDApi.Controllers
                         .FirstOrDefault(ics => ics.Instructor.UserRoles.Any(r => r.RoleId == "ROLE002"))
                         .Instructor.FullName
                            })
-                          .ToList();
+                          .ToListAsync();
 
             if (courses == null || !courses.Any())
             {
@@ -96,7 +92,6 @@ namespace CRUDApi.Controllers
         #endregion
 
         #region Get Course Materials By Course Id
-        //[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
         [HttpGet("CurrentCourseMaterial")]
         public async Task<ActionResult<AllMaterialDto>> GetCourseMaterials(string CycleId)
         {
@@ -124,7 +119,7 @@ namespace CRUDApi.Controllers
             }
 
             // Get course materials using courseId and studentId
-            var materials = (from cs in _context.CourseSemesters
+            var materials =await (from cs in _context.CourseSemesters
                              join l in _context.Lectures on cs.CycleId equals l.CourseCycleId
                              join lf in _context.LectureFiles on l.LectureId equals lf.LectureId
                              join s in _context.Semesters on cs.SemesterId equals s.SemesterId
@@ -138,7 +133,7 @@ namespace CRUDApi.Controllers
                                  CreatedAt = l.CreatedAt
                                  ,path=lf.FilePath
                              })
-                            .ToList();
+                            .ToListAsync();
 
             if (materials == null || !materials.Any())
             {
@@ -179,12 +174,13 @@ namespace CRUDApi.Controllers
             }
 
             // Get quizzes and calculate availability
-            var quizzes = (from q in _context.Quizzes
+            var quizzes = await(from q in _context.Quizzes
                            where q.CourseCycleId == cycleId
                            select new AllQuizesDto
                            {
                                Id = q.QuizId,
                                Title = q.Title,
+                               numberOfQuestion=_context.Questions.Count(qu=>qu.QuizId==q.QuizId),
                                StartDate = (DateTime)q.StartDate,
                                EndDate = (DateTime)q.EndDate,
                                Status = (q.StartDate >= DateTime.Now && q.EndDate <= DateTime.Now) ? "Not Available" : " Available"??"is null"
@@ -192,7 +188,7 @@ namespace CRUDApi.Controllers
                            })
                           //.AsEnumerable()  // Client-side evaluation if needed
                                         //.OrderByDescending(q => q.CreatedAt)
-                          .ToList();
+                          .ToListAsync();
 
             if (quizzes == null || !quizzes.Any())
             {
@@ -205,7 +201,6 @@ namespace CRUDApi.Controllers
         #endregion
         
         #region Get All Tasks
-        //[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
         [HttpGet("CurrentCoursesTasks")]
         public async Task<ActionResult<TaskDto>> GetAllTasks()
         {
@@ -224,7 +219,7 @@ namespace CRUDApi.Controllers
             //        return user?.UserId;
 
             var studentId = user.UserId;
-
+            string currentSemester = CurrentSemester();
 
             // Get tasks for the enrolled student
             var tasks = (from t in _context.Tasks
@@ -234,8 +229,8 @@ namespace CRUDApi.Controllers
                         join se in _context.StudentEnrollments on cs.CycleId equals se.CourseCycleId
                         join ta in _context.TaskAnswers on t.TaskId equals ta.TaskId into taskss
                         from tas in taskss.DefaultIfEmpty()
-                        where se.StudentId == studentId 
-                        select new TaskDto{
+                        where se.StudentId == studentId &&cs.SemesterId== currentSemester
+                         select new TaskDto{
                              taskId = t.TaskId,
                              taskName = t.Title,
                              taskGrade = t.Grade,
@@ -343,7 +338,7 @@ namespace CRUDApi.Controllers
                 return Unauthorized("Student not enrolled in this course");
             }
 
-            var task = (
+            var task = await(
                          from t in _context.Tasks.Include(t => t.TaskAnswers)
                          join ta in _context.TaskAnswers on t.TaskId equals ta.TaskId into taskss
                          from tas in taskss.DefaultIfEmpty()
@@ -359,7 +354,7 @@ namespace CRUDApi.Controllers
                              //CreatedAt = (DateTime)t.CreatedAt,
                              status = tas.Status ?? "No Submited Answers"
                          })
-                 .ToList();
+                 .ToListAsync();
             if (task == null)
             {
                 return NoContent();
@@ -381,7 +376,7 @@ namespace CRUDApi.Controllers
 
             var email = emailClaim.Value;
 
-            var user = _context.Users.FirstOrDefault(u => u.Email == email);
+            var user =await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
 
             if (user == null)
             {
@@ -391,21 +386,21 @@ namespace CRUDApi.Controllers
             var studentId = user.UserId;
             //var quizList = new List<Dictionary<string, double>>();
             //var taskList = new List<Dictionary<string, double>>();
-
-            var quizGradesQuery = (from sqg in _context.StudentQuizGrades
+            //string? currentSemester = CurrentSemester();
+            var quizGradesQuery =await (from sqg in _context.StudentQuizGrades
                                    join q in _context.Quizzes on sqg.QuizId equals q.QuizId
                                    join cs in _context.CourseSemesters on q.CourseCycleId equals cs.CycleId
                                    join c in _context.Courses on cs.CourseId equals c.CourseId
-                                   where sqg.StudentId == studentId
+                                   where sqg.StudentId == studentId //&&cs.SemesterId== currentSemester
                                    select new TaskQuizDto
                                    {
                                        courseName = c.Name,
                                        quizGrade = (double?)sqg.Grade,
                                        quizTitle = q.Title,
 
-                                   }).ToList();
+                                   }).ToListAsync();
 
-            var taskGradesQuery = (from ta in _context.TaskAnswers
+            var taskGradesQuery =await (from ta in _context.TaskAnswers
                                    join t in _context.Tasks on ta.TaskId equals t.TaskId
                                    join cs in _context.CourseSemesters on t.CourseCycleId equals cs.CycleId
                                    join c in _context.Courses on cs.CourseId equals c.CourseId
@@ -415,7 +410,7 @@ namespace CRUDApi.Controllers
                                        courseName = c.Name,
                                        taskGrade = (double?)t.Grade,
                                        taskTitle = t.Title,
-                                   }).ToList();
+                                   }).ToListAsync();
 
             //var grades = quizGradesQuery.Union(taskGradesQuery);
             var grades = quizGradesQuery.Concat(taskGradesQuery)
@@ -484,7 +479,7 @@ namespace CRUDApi.Controllers
 
         #region Get All Grades by course Id
         [HttpGet("GetAllGradesForCurrentCourse")]
-        public IActionResult GetCourseGrades(string courseId)
+        public async Task< IActionResult> GetCourseGrades(string courseId)
         {
             var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
 
@@ -495,34 +490,36 @@ namespace CRUDApi.Controllers
 
             var email = emailClaim.Value;
 
-            var user = _context.Users.FirstOrDefault(u => u.Email == email);
+            var user =await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
 
             //        // If the user exists, return their user_id
             //        return user?.UserId;
 
             var studentId = user.UserId;
             // Retrieve quiz grades
-            var quizGrades = (from q in _context.Quizzes
+            var quizGrades = await(from q in _context.Quizzes
                               join sqg in _context.StudentQuizGrades on q.QuizId equals sqg.QuizId
                               where q.CourseCycleId == courseId && sqg.StudentId == studentId
                               orderby sqg.CreatedAt
                               select new QuizGradeDto
                               {
                                   Title = q.Title,
-                                  Grade = sqg.Grade,
+                                  studentGrade = sqg.Grade,
+                                  fullGrade=q.Grade,
                                   Date = (DateTime)sqg.CreatedAt
-                              }).ToList();
+                              }).ToListAsync();
 
-            var taskGrades = (from ta in _context.TaskAnswers
+            var taskGrades = await(from ta in _context.TaskAnswers
                               join t in _context.Tasks on ta.TaskId equals t.TaskId
                               where t.CourseCycleId == courseId && ta.StudentId == studentId
                               select new QuizGradeDto
                               {
 
                                   Title = t.Title,
-                                  Grade = ta.Grade,
+                                  studentGrade = ta.Grade,
+                                  fullGrade=t.Grade,
                                   Date = (DateTime)ta.CreatedAt
-                              }).ToList();
+                              }).ToListAsync();
             var grades = quizGrades.Concat(taskGrades);
             if (grades == null)
             {
@@ -531,11 +528,11 @@ namespace CRUDApi.Controllers
             return Ok(grades);
 
         }
-        #endregion#region Get All Grades by course Id
+        #endregion
 
         #region Upload File
         [HttpPost("File/Upload")]
-        public IActionResult UploadFile([FromForm] IFormFile file, string taskid)
+        public async Task< IActionResult> UploadFile([FromForm] IFormFile file, string taskid)
         {
             var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
 
@@ -546,7 +543,7 @@ namespace CRUDApi.Controllers
 
             var email = emailClaim.Value;
 
-            var user = _context.Users.FirstOrDefault(u => u.Email == email);
+            var user =await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
             var studentId = user.UserId;
             //var role = user.UserRoles;
 
@@ -631,7 +628,7 @@ namespace CRUDApi.Controllers
         [HttpGet("Getfilesoflecture")]
         public async Task<ActionResult> getMaterial(string lectureId)
         {
-            var material = (from l in _context.Lectures
+            var material =await (from l in _context.Lectures
                             join lf in _context.LectureFiles on l.LectureId equals lf.LectureId
                             where l.LectureId == lectureId
                             select new CourseMaterialDto
@@ -640,7 +637,7 @@ namespace CRUDApi.Controllers
                                 FilePath = lf.FilePath,
                                 CreatedAt = lf.CreatedAt
 
-                            }).ToList();
+                            }).ToListAsync();
             var materialout = new List<Dictionary<string, object?>>();
             foreach (var item in material)
             {
@@ -657,7 +654,6 @@ namespace CRUDApi.Controllers
         #endregion
 
         #region GetQuiz
-        //[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
         [HttpGet("Quiz")]
         public async Task<IActionResult> GetQuiz(string quizId)
         {
@@ -715,7 +711,7 @@ namespace CRUDApi.Controllers
 
         #region SubmitQuizzes
         [HttpPost("quiz/submit")]
-        public IActionResult SubmitQuizzes([FromBody] QuizAnswerRequestDto quizAnswers)
+        public async Task< IActionResult> SubmitQuizzes([FromBody] QuizAnswerRequestDto quizAnswers)
         {
             var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
 
@@ -726,50 +722,87 @@ namespace CRUDApi.Controllers
 
             var email = emailClaim.Value;
 
-            var user = _context.Users.FirstOrDefault(u => u.Email == email);
+            var user =await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
             var studentId = user.UserId;
 
-            var quiz = _context.Quizzes
+            var quiz =await _context.Quizzes
                 .Include(q => q.Questions)
                 .ThenInclude(q => q.QuestionAnswers)
-                .SingleOrDefault(q => q.QuizId == quizAnswers.QuizId);
+                .SingleOrDefaultAsync(q => q.QuizId == quizAnswers.QuizId);
             if (quiz == null)
             {
                 return NotFound($"Quiz with ID {quizAnswers.QuizId} not found.");
             }
-            var results = new List<Dictionary<string, bool>>();
+            //var results = new Dictionary<Dictionary<string, bool>,double?>();
+            var results = new  List<QuizResultDto>();
+
+            double? totalStudentGrades = 0;
+            double? totalGrades = 0;
+            foreach (var question in quiz.Questions)
+            {
+                totalGrades += question.Grade; // Summing up all possible grades for the quiz
+            }
             foreach (var answer in quizAnswers.Answers)
             {
                 var result = new Dictionary<string, bool>();
                 var question = quiz.Questions.FirstOrDefault(q => q.QuestionId == answer.QuestionId);
                 if (question == null)
                 {
-                    // Invalid question ID
-                    result[answer.QuestionId] = false;
-                    results.Add(result);
-                    continue;
+                    results.Add(new QuizResultDto
+                    {
+                        QuestionId = answer.QuestionId,
+                        IsCorrect = false,
+                        Grade = 0
+                    });
                 }
+                
 
+             
                 var correctAnswerIds = question.QuestionAnswers
                     .Where(a => a.IsCorrect)
                     .Select(a => a.AnswerId);
 
                 bool isCorrect = correctAnswerIds.Contains(answer.AnswerId);
-                result[answer.QuestionId] = isCorrect;
-                results.Add(result);
+                results.Add(new QuizResultDto
+                {
+                    QuestionId = answer.QuestionId,
+                    IsCorrect = isCorrect,
+                    Grade = isCorrect ? question.Grade : 0
+                });
 
-                /*var quizAnswer = new QuizAnswer
+                //results.Add(result,question.Grade);
+                if (isCorrect)
+                {
+                    totalStudentGrades += question.Grade; // Assuming `Grade` is a property of `Question`
+                }
+
+                var quizAnswer = new QuizAnswer
                 {
                     AnswerId = Guid.NewGuid().ToString(),
                     CreatedAt = DateTime.Now,
                     QuestionAnswersId =answer.AnswerId,
                     StudentId= studentId
                 };
-                _context.QuizAnswers.Add(quizAnswer);*/
+                _context.QuizAnswers.Add(quizAnswer);
             }
+            var studentQuizGrade = new StudentQuizGrade
+            {
+                StudentId = studentId,
+                QuizId = quizAnswers.QuizId,
+                Grade = totalStudentGrades,
+                CreatedAt = DateTime.Now
+            };
+            _context.StudentQuizGrades.Add(studentQuizGrade);
+            var finalResult = new QuizSubmissionResponseDto
+            {
+                results = results,
+                totalStudentGrade = totalStudentGrades,
+                totalGrade=totalGrades
+            };
+
             //_context.SaveChanges();
 
-            return Ok(results);
+            return Ok(finalResult);
         }
         #endregion 
 
@@ -786,12 +819,17 @@ namespace CRUDApi.Controllers
 
             var email = emailClaim.Value;
 
-            var user = _context.Users.FirstOrDefault(u => u.Email == email);
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
 
             var studentId = user.UserId;
-            var task = _context.Tasks
+            var task =await _context.Tasks
                 .Include(t => t.TaskAnswers)
-                .FirstOrDefault(t => t.TaskId == taskId);
+                .FirstOrDefaultAsync(t => t.TaskId == taskId);
+
+            if (task == null)
+            {
+                return NotFound("Task not found.");
+            }
             var taskdto = new TaskDto
             {
                 //InstructorName = task.Instructor.FullName,
@@ -818,10 +856,10 @@ namespace CRUDApi.Controllers
             return Ok(nonNullProperties);
 
         }
-        #endregion#region Get Task by task Id
+        #endregion
 
-        #region Get All Grades in One Course For A Student
-        [HttpGet("GetAllGradesForaCourse")]
+        #region Get All Grades in One Course For A Student *
+        /*[HttpGet("GetAllGradesForaCourse")]
         public async Task<IActionResult> getGradesForCurrentCourseForAstudent(string CycleId)
         {
             var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
@@ -833,10 +871,10 @@ namespace CRUDApi.Controllers
 
             var email = emailClaim.Value;
 
-            var user = _context.Users.FirstOrDefault(u => u.Email == email);
+            var user =await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
 
             var studentId = user.UserId;
-            var quizGrades = (from q in _context.Quizzes
+            var quizGrades =await (from q in _context.Quizzes
                               join sqg in _context.StudentQuizGrades on q.QuizId equals sqg.QuizId
                               where q.CourseCycleId == CycleId && sqg.StudentId == studentId
                               orderby sqg.CreatedAt
@@ -846,9 +884,9 @@ namespace CRUDApi.Controllers
                                   Title = q.Title,
                                   Grade = sqg.Grade,
                                   Date = (DateTime)sqg.CreatedAt
-                              }).ToList();
+                              }).ToListAsync();
 
-            var taskGrades = (from ta in _context.TaskAnswers
+            var taskGrades =await (from ta in _context.TaskAnswers
                               join t in _context.Tasks on ta.TaskId equals t.TaskId
                               where t.CourseCycleId == CycleId && ta.StudentId == studentId
                               select new GradeDto
@@ -857,15 +895,16 @@ namespace CRUDApi.Controllers
                                   Title = t.Title,
                                   Grade = ta.Grade,
                                   Date = (DateTime)ta.CreatedAt
-                              }).ToList();
+                              }).ToListAsync();
             var grades = quizGrades.Concat(taskGrades).ToList();
             if (grades == null)
             {
                 return NoContent();
             }
             return Ok(grades);
-        }
+        }*/
         #endregion
+
 
 
 
@@ -894,7 +933,7 @@ namespace CRUDApi.Controllers
 
             var email = emailClaim.Value;
 
-            var user = _context.Users.FirstOrDefault(u => u.Email == email);
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
 
             var studentId = user.UserId;
 

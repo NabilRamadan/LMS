@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Diagnostics;
 using System.Net;
 using System.Security.Claims;
 
@@ -22,7 +23,14 @@ namespace CRUDApi.Controllers
         {
             _context = context;
         }
-
+       private string CurrentSemester()
+        {
+            var semester = _context.Semesters
+                .OrderByDescending(s => s.CreatedAt)
+                .Select(s => s.SemesterId)
+                .First();
+            return semester;
+        }
 
         #region Get Current User Info
         [HttpGet("GetInstructorInfo")]
@@ -83,13 +91,14 @@ namespace CRUDApi.Controllers
 
             //        // If the user exists, return their user_id
             //        return user?.UserId;
+            string currentSemester = CurrentSemester();
 
             var userid = user.UserId;
             var course = await(from cs in _context.CourseSemesters
                           join c in _context.Courses on cs.CourseId equals c.CourseId
                           join ics in _context.InstructorCourseSemesters on cs.CycleId equals ics.CourseCycleId
-                          where ics.InstructorId == userid
-                          select new AllCourcesForInstructorDto
+                          where ics.InstructorId == userid&&cs.SemesterId== currentSemester
+                               select new AllCourcesForInstructorDto
                           {
                               CycleId = cs.CycleId,
                               Hours = c.Hours,
@@ -295,6 +304,7 @@ namespace CRUDApi.Controllers
                              startDate = (DateTime)t.StartDate,
                              endDate = (DateTime)t.EndDate,
                              filePath = t.FilePath,
+                             grade=t.Grade,
                              numberOfAllStudents=_context.StudentEnrollments
                              .Count(se=>se.CourseCycleId==t.CourseCycleId),
                              numberOfStudentsUploads=_context.TaskAnswers
@@ -624,7 +634,7 @@ namespace CRUDApi.Controllers
         [HttpGet("GetAllQuizesForOneCourse")]
         public async Task<IActionResult>getAllQuizesForOneCourse(string cycleId)
         {
-            var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+            /*var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
 
             if (emailClaim == null)
             {
@@ -635,31 +645,32 @@ namespace CRUDApi.Controllers
 
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
 
-            var userId = user.UserId;
+            var userId = user.UserId;*/
 
 
             
             var quizzes = await (from q in _context.Quizzes
-                           where q.CourseCycleId == cycleId && q.InstructorId==userId
+                           where q.CourseCycleId == cycleId //&& q.InstructorId==userId
                            select new getAllQuizesForOneCourseDto
                            {
                                Id = q.QuizId,
                                Title = q.Title,
+                               grade=q.Grade,
                                StartDate = (DateTime)q.StartDate,
                                EndDate = (DateTime)q.EndDate,
                                Status = (q.StartDate >= DateTime.Now && q.EndDate <= DateTime.Now) ? "Not Available" : " Available" ?? "is null",
                                numberOfAllStudents = _context.StudentEnrollments
                              .Count(se => se.CourseCycleId == q.CourseCycleId),
-                              /* numberOfStudentsSolve=_context.QuizAnswers
-                               .Count(qa=>qa.)*/
+                               numberOfStudentsSolve=_context.StudentQuizGrades
+                               .Count(qa=>qa.QuizId==q.QuizId)
 
                            })
                           .ToListAsync();
 
-            if (quizzes == null || !quizzes.Any())
+            /*if (quizzes == null || !quizzes.Any())
             {
                 return NotFound();
-            }
+            }*/
             return Ok(quizzes);
         }
         #endregion
@@ -710,6 +721,29 @@ namespace CRUDApi.Controllers
         }
         #endregion
 
+        #region Add Grade For Astudent Task
+        [HttpPut("Add Grade For Astudent Task")]
+        public async Task<IActionResult> AddGradeForAstudentTask(AddGradeForAstudentTaskDto data)
+        {
+            var studentId = data.studentId;
+            var taskId = data.taskId;
+            if(studentId == null || taskId == null)
+            {
+                return BadRequest();
+            }
+            var taskAnswer = await _context.TaskAnswers
+                .FirstOrDefaultAsync(ta => ta.TaskId == taskId && ta.StudentId == studentId);
+            if(taskAnswer == null)
+            {
+                return BadRequest();
+            }
+            taskAnswer.Grade = data.Grade;
+            _context.TaskAnswers.Update(taskAnswer);
+            _context.SaveChanges();
+            return Ok("Updated Succefully..");
+        }
+        #endregion
+
         #region Delete Quiz
         [HttpDelete("DeleteQuiz")]
         public async Task<IActionResult> deleteQuizAsync(string quizId)
@@ -743,7 +777,7 @@ namespace CRUDApi.Controllers
 
         #region Doctor or Instructor Create quiz 
         // POST: api/quiz/create
-        [HttpPost("createQuiz")]
+        /*[HttpPost("createQuiz")]
         public async Task<IActionResult> CreateQuiz(CreateQuizDto quizDto)
         {
 
@@ -758,7 +792,7 @@ namespace CRUDApi.Controllers
 
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
             var userId = user.UserId;
-
+            double? quizGrade = 0;
             var quiz = new Quiz
             {
                 QuizId = Guid.NewGuid().ToString(),
@@ -766,7 +800,7 @@ namespace CRUDApi.Controllers
                 Notes = quizDto.notes,
                 StartDate = quizDto.startDate,
                 EndDate = quizDto.endDate,
-                Grade = quizDto.grade,
+                //Grade = quizDto.grade,
                 InstructorId = userId,
                 CourseCycleId=quizDto.courseCycleId,
                 CreatedAt = DateTime.Now,
@@ -786,6 +820,7 @@ namespace CRUDApi.Controllers
                     QuizId= quiz.QuizId,
                     CreatedAt = DateTime.Now ,
                 };
+                quizGrade += question.Grade;
 
                 _context.Questions.Add(question);
                 await _context.SaveChangesAsync();
@@ -807,11 +842,88 @@ namespace CRUDApi.Controllers
                     await _context.SaveChangesAsync();
                 }
             }
+            quiz.Grade = quizGrade;
+            _context.Quizzes.Update(quiz);
 
             return Created("",quizDto);
             
             
+        }*/
+
+        #region Doctor or Instructor Create quiz 
+        [HttpPost("createQuiz")]
+        public async Task<IActionResult> CreateQuiz(CreateQuizDto quizDto)
+        {
+            var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+
+            if (emailClaim == null)
+            {
+                return BadRequest("Email claim not found in token.");
+            }
+
+            var email = emailClaim.Value;
+
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
+            if (user == null)
+            {
+                return BadRequest("User not found.");
+            }
+            var userId = user.UserId;
+
+            double? quizGrade = 0;
+            var quiz = new Quiz
+            {
+                QuizId = Guid.NewGuid().ToString(),
+                Title = quizDto.title,
+                Notes = quizDto.notes,
+                StartDate = quizDto.startDate,
+                EndDate = quizDto.endDate,
+                InstructorId = userId,
+                CourseCycleId = quizDto.courseCycleId,
+                CreatedAt = DateTime.Now,
+            };
+
+            foreach (var questionDto in quizDto.Questions)
+            {
+                var question = new Question
+                {
+                    QuestionId = Guid.NewGuid().ToString(),
+                    Text = questionDto.text,
+                    Type = questionDto.type,
+                    QuestionNumber = questionDto.questionNumber,
+                    Grade = questionDto.grade,
+                    QuizId = quiz.QuizId,
+                    CreatedAt = DateTime.Now,
+                };
+                quizGrade += question.Grade;
+
+                _context.Questions.Add(question);
+
+                foreach (var answerDto in questionDto.Answers)
+                {
+                    var answer = new QuestionAnswer
+                    {
+                        AnswerId = Guid.NewGuid().ToString(),
+                        Text = answerDto.text,
+                        IsCorrect = answerDto.isCorrect,
+                        CreatedAt = DateTime.Now,
+                        AnswerNumber = answerDto.answerNumber,
+                        QuestionId = question.QuestionId
+                    };
+
+                    _context.QuestionAnswers.Add(answer);
+                }
+            }
+            quiz.Grade = quizGrade;
+            _context.Quizzes.Add(quiz);
+
+            await _context.SaveChangesAsync();
+
+            //return CreatedAtAction(nameof(CreateQuiz), new { id = quiz.QuizId }, quiz);
+            return Ok("Created ");
         }
+        #endregion
+
 
 
         #endregion
