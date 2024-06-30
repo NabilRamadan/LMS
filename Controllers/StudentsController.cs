@@ -62,7 +62,10 @@ namespace CRUDApi.Controllers
 
             var user = _context.Users.FirstOrDefault(u => u.Email == email);
             var studentId = user.UserId;
-
+            if (user.Status.ToLower() == "not active")
+            {
+                return BadRequest("not active");
+            }
             string currentSemester = CurrentSemester();
 
             var courses =await (from cs in _context.CourseSemesters
@@ -277,8 +280,6 @@ namespace CRUDApi.Controllers
 
             var user = _context.Users.FirstOrDefault(u => u.Email == email);
 
-            //        // If the user exists, return their user_id
-            //        return user?.UserId;
 
             var userId = user.UserId;
 

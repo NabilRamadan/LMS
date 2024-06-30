@@ -17,6 +17,7 @@ using System.Net;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
+using static System.Net.WebRequestMethods;
 namespace CRUDApi.Controllers
 {
     [Route("api/[controller]")]
@@ -169,7 +170,7 @@ namespace CRUDApi.Controllers
                 CreatedAt = DateTime.UtcNow,
                 Status = "Active",
                 FacultyId = "FAC001",
-                ImagePath = null
+                ImagePath = "https://nabilramadan.runasp.net/WhatsApp%20Image%202024-06-30%20at%2004.15.42_10878c6a.jpg"
             };
 
             _context.Users.Add(userEntity);
@@ -238,7 +239,7 @@ namespace CRUDApi.Controllers
                 CreatedAt = DateTime.UtcNow,
                 Status = "Active",
                 FacultyId = "FAC001",
-                ImagePath = null
+                ImagePath = "https://nabilramadan.runasp.net/WhatsApp%20Image%202024-06-30%20at%2004.15.42_10878c6a.jpg"
             };
             _context.Users.Add(userEntity);
             var role = await _context.Roles.FirstOrDefaultAsync(r => r.Name == model.RoleOfUser);

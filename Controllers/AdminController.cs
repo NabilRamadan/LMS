@@ -690,30 +690,43 @@ namespace CRUDApi.Controllers
         [HttpGet("Get All Instructors Ids")]
         public async Task<IActionResult> GetAllInstructorsIds([FromQuery] string email = null)
         {
-                var studentsQuery = from u in _context.Users
-                                    join r in _context.UserRoles on u.UserId equals r.UserId
-                                    where r.RoleId == "ROLE002"
-                                    select new GetAllstudentIdsDto
-                                    {
-                                        studentId = u.UserId,
-                                        studentName = u.FullName,
-                                        studentEmail = u.Email
-                                    };
+            var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
 
-                if (!string.IsNullOrEmpty(email))
-                {
-                    studentsQuery = studentsQuery.Where(s => s.studentEmail == email);
-                }
-
-                var students = await studentsQuery.ToListAsync();
-
-                if (students == null || students.Count == 0)
-                {
-                    return NotFound();
-                }
-
-                return Ok(students);
+            if (emailClaim == null)
+            {
+                return BadRequest("Email claim not found in token.");
             }
+
+            var userEmail = emailClaim.Value;
+
+            var user = _context.Users.FirstOrDefault(u => u.Email == userEmail);
+            var userId = user.UserId;
+
+            var staffQuery = from u in _context.Users
+                                join ur in _context.UserRoles on u.UserId equals ur.UserId
+                                join r in _context.Roles on ur.RoleId equals r.RoleId
+                                where ur.RoleId != "ROLE003"&&u.UserId!= userId
+                                select new GetAllInstructorsIdsDto
+                                {
+                                    staffEmail = u.Email,
+                                    staffId = u.UserId,
+                                    staffName=u.FullName,
+                                    staffrole=r.Name
+                                };
+            if (!string.IsNullOrEmpty(email))
+            {
+                staffQuery = staffQuery.Where(s => s.staffEmail == email);
+            }
+
+            var students = await staffQuery.ToListAsync();
+
+            if (students == null || students.Count == 0)
+            {
+                return NotFound();
+            }
+
+            return Ok(students);
+        }
         #endregion
 
         #region Activate Student Acount
@@ -741,7 +754,7 @@ namespace CRUDApi.Controllers
 
         #region Get All CyclesIds For Semester
         [HttpGet("Get All CyclesIds For Semester")]
-        public async Task<IActionResult> GetAllCyclesIdsForSemester(string semesterId)
+        public async Task<IActionResult> GetAllCyclesIdsForSemester(string semesterId,string studentId)
         {
             var cycles =await (from cs in _context.CourseSemesters
                           join c in _context.Courses on cs.CourseId equals c.CourseId
@@ -754,7 +767,20 @@ namespace CRUDApi.Controllers
                               cycleId = cs.CycleId,
                               instructorFullName = u.FullName
                           }).ToListAsync();
-            return Ok(cycles);
+            var studentCycles = from se in _context.StudentEnrollments
+                                join cs in _context.CourseSemesters on se.CourseCycleId equals cs.CycleId
+                                join s in _context.Semesters on cs.SemesterId equals s.SemesterId
+                                where s.SemesterId == semesterId && se.StudentId == studentId
+                                select cs.CycleId;
+            var data = new List<GetAllCyclesIdsForSemesterDto>();
+            foreach (var cycle in cycles)
+            {
+                if(!studentCycles.Contains(cycle.cycleId))
+                {
+                    data.Add(cycle);
+                }
+            }
+            return Ok(data);
         }
         #endregion
 
