@@ -61,7 +61,20 @@ namespace CRUDApi.Controllers
         [HttpGet("GetAllCalendar")]
         public async Task<ActionResult<IEnumerable<CalendarDto>>> GetCalendars()
         {
-            var calendars = await _context.Calendars.Select(c => new CalendarDto
+            var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+
+            if (emailClaim == null)
+            {
+                return BadRequest("Email claim not found in token.");
+            }
+
+            var email = emailClaim.Value;
+
+            var user = _context.Users.FirstOrDefault(u => u.Email == email);
+            var studentId = user.UserId;
+            var calendars = await _context.Calendars
+                .Where(c=>c.UserId== studentId)
+                .Select(c => new CalendarDto
             {
                 CalendarId = c.CalendarId,
                 UserId = c.UserId,

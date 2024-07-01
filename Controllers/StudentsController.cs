@@ -186,12 +186,17 @@ namespace CRUDApi.Controllers
                                numberOfQuestion=_context.Questions.Count(qu=>qu.QuizId==q.QuizId),
                                StartDate = (DateTime)q.StartDate,
                                EndDate = (DateTime)q.EndDate,
-                               Status = (q.StartDate >= DateTime.Now && q.EndDate <= DateTime.Now) ? "Not Available" : " Available"??"is null"
+                               Status = (_context.StudentQuizGrades
+                               .FirstOrDefault(sqg => sqg.StudentId == studentId && sqg.QuizId == q.QuizId))!=null
+                               ?"Solved" :
+                               ((q.StartDate >= DateTime.Now && q.EndDate <= DateTime.Now) ? "Not Available" : " Available")
                            
                            })
+
                           //.AsEnumerable()  // Client-side evaluation if needed
                                         //.OrderByDescending(q => q.CreatedAt)
                           .ToListAsync();
+         
 
             if (quizzes == null || !quizzes.Any())
             {
@@ -662,11 +667,22 @@ namespace CRUDApi.Controllers
         [HttpGet("Quiz")]
         public async Task<IActionResult> GetQuiz(string quizId)
         {
+            var emailClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+
+            if (emailClaim == null)
+            {
+                return BadRequest("Email claim not found in token.");
+            }
+
+            var email = emailClaim.Value;
+
+            var user = _context.Users.FirstOrDefault(u => u.Email == email);
+            var studentId = user.UserId;
             var quiz = await _context.Quizzes
                 .Include(q => q.Questions)
                 .ThenInclude(q => q.QuestionAnswers)
                 .FirstOrDefaultAsync(q => q.QuizId == quizId);
-
+            
             if (quiz == null)
             {
                 return NotFound();
@@ -680,7 +696,8 @@ namespace CRUDApi.Controllers
             {
                 return Ok("The Quiz time has Ended...!");
             }*/
-
+            /*var check = _context.StudentQuizGrades
+                .FirstOrDefault(sqg => sqg.StudentId == studentId && sqg.QuizId == quizId);*/
             var quizDto = new QuizDto
             {
                 Id = quiz.QuizId,
@@ -688,11 +705,12 @@ namespace CRUDApi.Controllers
                 // Notes = quiz.Notes,
                 StartDate = (DateTime)quiz.StartDate,
                 EndDate = (DateTime)quiz.EndDate,
-                Duration=(TimeSpan) (quiz.EndDate - quiz.StartDate),
+                Duration=(TimeSpan)(quiz.EndDate - quiz.StartDate).Value,
                 Grade = quiz.Grade,
                 CourseId = quiz.CourseCycleId,
                 InstructorId = quiz.InstructorId,
                 CreatedAt = (DateTime)quiz.CreatedAt,
+                
                 
                 Questions = quiz.Questions.Select(q => new QuestionDto
                 {
@@ -738,14 +756,13 @@ namespace CRUDApi.Controllers
             {
                 return NotFound($"Quiz with ID {quizAnswers.QuizId} not found.");
             }
-            //var results = new Dictionary<Dictionary<string, bool>,double?>();
             var results = new  List<QuizResultDto>();
 
             double? totalStudentGrades = 0;
             double? totalGrades = 0;
             foreach (var question in quiz.Questions)
             {
-                totalGrades += question.Grade; // Summing up all possible grades for the quiz
+                totalGrades += question.Grade; 
             }
             foreach (var answer in quizAnswers.Answers)
             {
@@ -775,10 +792,9 @@ namespace CRUDApi.Controllers
                     Grade = isCorrect ? question.Grade : 0
                 });
 
-                //results.Add(result,question.Grade);
                 if (isCorrect)
                 {
-                    totalStudentGrades += question.Grade; // Assuming `Grade` is a property of `Question`
+                    totalStudentGrades += question.Grade;
                 }
 
                 var quizAnswer = new QuizAnswer
@@ -805,7 +821,7 @@ namespace CRUDApi.Controllers
                 totalGrade=totalGrades
             };
 
-            //_context.SaveChanges();
+            _context.SaveChanges();
 
             return Ok(finalResult);
         }

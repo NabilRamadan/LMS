@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Numerics;
 using System.Security.Claims;
+using System.Security.Cryptography.Xml;
 
 namespace CRUDApi.Controllers
 {
@@ -87,40 +88,19 @@ namespace CRUDApi.Controllers
 
         #region Update News
         [HttpPut("{id}")]
-        public async Task<IActionResult> PutNews(string id, NewsDto newsDto)
+        public async Task<IActionResult> PutNews(string id,[FromBody] string newsContent)
         {
-            if (id != newsDto.NewsId)
-            {
-                return BadRequest(" Id not Found...!");
-            }
+           var news=await _context.News.FirstOrDefaultAsync(e => e.NewsId == id);
 
-            var news = new News
+            if (news == null)
             {
-                NewsId = newsDto.NewsId,
-                Content = newsDto.Content,
-                FilePath = newsDto.FilePath,
-                FacultyId = newsDto.FacultyId,
-                UserId = newsDto.UserId,
-                CreatedAt = newsDto.CreatedAt ?? DateTime.Now
-            };
-
-            _context.Entry(news).State = EntityState.Modified;
-            try
-            {
-                await _context.SaveChangesAsync();
+                return NotFound();
             }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!NewsExists(id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
-            }
-            return NoContent();
+            news.Content = newsContent;
+            news.CreatedAt = DateTime.Now;
+            _context.News.Update(news);
+            _context.SaveChanges();
+            return Ok(news);
         } 
         #endregion
 

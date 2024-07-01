@@ -106,10 +106,10 @@ namespace CRUDApi.Controllers
                               Name=c.Name,
                           }).ToListAsync();
            
-            if (course == null)
+            /*if (course == null)
             {
                 return NoContent();
-            }
+            }*/
             return Ok(course);
         }
         #endregion
@@ -293,7 +293,7 @@ namespace CRUDApi.Controllers
 
             //        // If the user exists, return their user_id
             //        return user?.UserId;
-
+            //var cycleIdCheck=
             var userId = user.UserId;
             var tasks =await (from t in _context.Tasks
                          where t.CourseCycleId == cycleId && t.InstructorId == userId
@@ -317,10 +317,10 @@ namespace CRUDApi.Controllers
                     .Where(property => property.GetValue(item) != null)
                     .ToDictionary(property => property.Name, property => property.GetValue(item)));
             }*/
-            if (tasks == null || !tasks.Any())
+            /*if (tasks == null || !tasks.Any())
             {
                 return NotFound();
-            }
+            }*/
 
             return Ok(tasks);
         }
@@ -340,10 +340,10 @@ namespace CRUDApi.Controllers
                              filePath=ta.FilePath,
                              timeUploaded=ta.CreatedAt
                          }).ToListAsync();
-            if (students == null)
+            /*if (students == null)
             {
                 return NoContent();
-            }
+            }*/
             return Ok(students);
         }
         #endregion
@@ -483,10 +483,10 @@ namespace CRUDApi.Controllers
                                 studentId = u.UserId,
                                 studentName = u.FullName
                             }).ToListAsync();
-            if(students.Count == 0)
+            /*if(students.Count == 0)
             {
                 return BadRequest("there no students enrolled in this Course ");
-            }
+            }*/
             return Ok(students);
         }
         #endregion
@@ -518,10 +518,10 @@ namespace CRUDApi.Controllers
                                   Date = (DateTime)ta.CreatedAt
                               }).ToListAsync();
             var grades = quizGrades.Concat(taskGrades).ToList();
-            if (grades == null)
+            /*if (grades == null)
             {
                 return NoContent();
-            }
+            }*/
             return Ok(grades);
         }
         #endregion

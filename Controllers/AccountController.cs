@@ -406,11 +406,6 @@ namespace CRUDApi.Controllers
             var ftpLogin = "site1439";
             var ftpPassword = "p@5Y6gZ!Q_e7";
             var uploadPath = "/wwwroot/AccountPhoto";
-
-
-
-            
-
             var fileName = Guid.NewGuid().ToString() + Path.GetExtension(file.FileName);
             var ftpUri = new Uri($"ftp://{ftpServer}:{ftpPort}{uploadPath}/{fileName}");
             var ftpRequest = (FtpWebRequest)WebRequest.Create(ftpUri);
